@@ -16,6 +16,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private readonly List<Cmd> _cmds;
     private bool _unloading = false;
     private int _tickCount = 0;
+    private HWND _currentHwnd;
+    private RECT _currentClientRect;
+    private RECT _currentWindowRect;
 
     public Plugin([RequiredVersion("1.0")] DalamudPluginInterface pluginInterface)
     {
@@ -101,16 +104,58 @@ public sealed unsafe class Plugin : IDalamudPlugin
         y = (int) Math.Round(y * scaleY);
     }
 
+    public void ConvertCoordsGlobalToGame(ref int x, ref int y)
+    {
+        if (CurrentWidth == CurrentWindowWidth && CurrentHeight == CurrentWindowHeight)
+        {
+            return;
+        }
+
+        float scaleX = CurrentWidth / (float) CurrentWindowWidth;
+        float scaleY = CurrentHeight / (float) CurrentWindowHeight;
+
+        var p = new POINT(x, y);
+
+        TerraFX.Interop.Windows.Windows.ScreenToClient(_currentHwnd, &p);
+
+        p.x = (int) Math.Round(p.x * scaleX);
+        p.y = (int) Math.Round(p.y * scaleY);
+
+        TerraFX.Interop.Windows.Windows.ClientToScreen(_currentHwnd, &p);
+
+        x = p.x;
+        y = p.y;
+    }
+
+    public void ConvertCoordsGameToGlobal(ref int x, ref int y)
+    {
+        if (CurrentWidth == CurrentWindowWidth && CurrentHeight == CurrentWindowHeight)
+        {
+            return;
+        }
+
+        float scaleX = CurrentWindowWidth / (float) CurrentWidth;
+        float scaleY = CurrentWindowHeight / (float) CurrentHeight;
+
+        var p = new POINT(x, y);
+
+        TerraFX.Interop.Windows.Windows.ScreenToClient(_currentHwnd, &p);
+
+        p.x = (int) Math.Round(p.x * scaleX);
+        p.y = (int) Math.Round(p.y * scaleY);
+
+        TerraFX.Interop.Windows.Windows.ClientToScreen(_currentHwnd, &p);
+
+        x = p.x;
+        y = p.y;
+    }
+
     public void Update()
     {
         var dev = Device.Instance();
 
-        RECT rect = default;
-
-        TerraFX.Interop.Windows.Windows.GetClientRect((HWND) (IntPtr) dev->hWnd, &rect);
-
-        int rectWidth = rect.right - rect.left;
-        int rectHeight = rect.bottom - rect.top;
+        int rectWidth = _currentClientRect.right - _currentClientRect.left;
+        int rectHeight = _currentClientRect.bottom - _currentClientRect.top;
 
         if ((rectWidth <= 0 || rectHeight <= 0) && !_unloading)
         {
@@ -159,6 +204,17 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdate(IFramework framework)
     {
+        var dev = Device.Instance();
+
+        _currentHwnd = (HWND) (IntPtr) dev->hWnd;
+
+        fixed (RECT* currentClientRectPtr = &_currentClientRect)
+        fixed (RECT* currentWindowRectPtr = &_currentWindowRect)
+        {
+            TerraFX.Interop.Windows.Windows.GetClientRect(_currentHwnd, currentClientRectPtr);
+            TerraFX.Interop.Windows.Windows.GetWindowRect(_currentHwnd, currentWindowRectPtr);
+        }
+
         if (_tickCount++ >= 10)
         {
             _tickCount = 0;

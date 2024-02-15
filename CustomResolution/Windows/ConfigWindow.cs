@@ -53,6 +53,7 @@ public class ConfigWindow : Window, IDisposable
     public override void Draw()
     {
         var plugin = Service.Plugin;
+        var save = false;
 
         _displayCurrentWH[0] = (int) plugin.CurrentWidth;
         _displayCurrentWH[1] = (int) plugin.CurrentHeight;
@@ -68,14 +69,25 @@ public class ConfigWindow : Window, IDisposable
 
         if (_configIsScale)
         {
-            ImGui.InputFloat("Scale", ref _configScale, 0.01f, 0.1f);
+            if (ImGui.InputFloat("Scale", ref _configScale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.EnterReturnsTrue))
+            {
+                save = true;
+            }
         }
         else
         {
-            ImGui.InputInt2("Size in pixels", ref _configWH[0]);
+            if (ImGui.InputInt2("Size in pixels", ref _configWH[0], ImGuiInputTextFlags.EnterReturnsTrue))
+            {
+                save = true;
+            }
         }
 
         if (ImGui.Button("Save and apply"))
+        {
+            save = true;
+        }
+
+        if (save)
         {
             UpdateToConfig();
         }
