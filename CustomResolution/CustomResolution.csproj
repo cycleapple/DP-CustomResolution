@@ -26,9 +26,7 @@
 
   <ItemGroup>
     <PackageReference Include="DalamudPackager" Version="2.1.12" />
-    <PackageReference Include="Microsoft.Windows.CsWin32" Version="0.3.49-beta">
-      <PrivateAssets>all</PrivateAssets>
-    </PackageReference>
+    <PackageReference Include="TerraFX.Interop.Windows" Version="10.0.22621.2" />
     <Reference Include="FFXIVClientStructs">
       <HintPath>$(DalamudLibPath)FFXIVClientStructs.dll</HintPath>
       <Private>false</Private>

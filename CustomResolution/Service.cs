@@ -1,6 +1,6 @@
-﻿using Dalamud.IoC;
+﻿using CustomResolution.Hooks;
+using Dalamud.IoC;
 using Dalamud.Plugin;
-using System;
 using Dalamud.Plugin.Services;
 
 namespace CustomResolution;
@@ -12,6 +12,9 @@ public sealed class Service
     public static Configuration Config { get; internal set; } = null!;
 
     public static PluginUI PluginUI { get; internal set; } = null!;
+
+    public static WndProcHook WndProcHook { get; internal set; } = null!;
+    public static CursorPosHooks CursorPosHooks { get; internal set; } = null!;
 
     [PluginService]
     public static DalamudPluginInterface PluginInterface { get; private set; } = null!;
@@ -26,7 +29,8 @@ public sealed class Service
     public static IClientState ClientState { get; private set; } = null!;
 
     [PluginService]
-    public static IPluginLog PluginLog { get; private set; } = null!;
+    public static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
 
-    public static Func<string, object?>? GetPluginInstance { get; private set; }
+    [PluginService]
+    public static IPluginLog PluginLog { get; private set; } = null!;
 }

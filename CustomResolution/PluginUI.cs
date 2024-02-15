@@ -41,6 +41,6 @@ public sealed class PluginUI : IDisposable
 
     private void ShowConfigWindow()
     {
-
+        SettingsVisible = true;
     }
 }
