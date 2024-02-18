@@ -21,7 +21,11 @@ public sealed class PluginUI : IDisposable
     public bool SettingsVisible
     {
         get => _configWindow.IsOpen;
-        set => _configWindow.IsOpen = value;
+        set
+        {
+            _configWindow.IsOpen = value;
+            _configWindow.UpdateFromConfig();
+        }
     }
 
     public void Dispose()

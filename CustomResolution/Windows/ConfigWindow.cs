@@ -10,6 +10,7 @@ public class ConfigWindow : Window, IDisposable
     private int[] _displayCurrentWH = new int[2];
     private int[] _displayCurrentWindowWH = new int[2];
 
+    private bool _configIsEnabled;
     private bool _configIsScale;
     private float _configScale;
     private int[] _configWH = new int[2];
@@ -19,7 +20,7 @@ public class ConfigWindow : Window, IDisposable
         ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar |
         ImGuiWindowFlags.NoScrollWithMouse)
     {
-        Size = new Vector2(430, 160);
+        Size = new Vector2(430, 184);
         SizeCondition = ImGuiCond.Always;
 
         UpdateFromConfig();
@@ -32,6 +33,7 @@ public class ConfigWindow : Window, IDisposable
     {
         var config = Service.Config;
 
+        _configIsEnabled = config.IsEnabled;
         _configIsScale = config.IsScale;
         _configScale = config.Scale;
         _configWH[0] = (int) config.Width;
@@ -42,6 +44,7 @@ public class ConfigWindow : Window, IDisposable
     {
         var config = Service.Config;
 
+        config.IsEnabled = _configIsEnabled;
         config.IsScale = _configIsScale;
         config.Scale = _configScale;
         config.Width = (uint) _configWH[0];
@@ -64,6 +67,8 @@ public class ConfigWindow : Window, IDisposable
         ImGui.InputInt2("Current window size", ref _displayCurrentWindowWH[0]);
         ImGui.InputInt2("Current render size", ref _displayCurrentWH[0]);
         ImGui.EndDisabled();
+
+        ImGui.Checkbox("Enabled", ref _configIsEnabled);
 
         ImGui.Checkbox("Use scale", ref _configIsScale);
 

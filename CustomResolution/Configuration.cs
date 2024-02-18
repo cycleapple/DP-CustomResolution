@@ -9,6 +9,7 @@ public class Configuration : IPluginConfiguration
 {
     public int Version { get; set; } = 0;
 
+    public bool IsEnabled = true;
     public bool IsScale = true;
     public float Scale = 1f;
     public uint Width = 1024;

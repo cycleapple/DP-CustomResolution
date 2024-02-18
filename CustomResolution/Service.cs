@@ -1,4 +1,5 @@
 ﻿using CustomResolution.Hooks;
+using Dalamud.Game.Text;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -33,4 +34,21 @@ public sealed class Service
 
     [PluginService]
     public static IPluginLog PluginLog { get; private set; } = null!;
+
+    [PluginService]
+    public static IChatGui ChatGui { get; private set; } = null!;
+
+    public static void PrintChat(string msg)
+    {
+        ChatGui.Print(new XivChatEntry
+        {
+            Message = msg,
+            Type = PluginInterface.GeneralChatType
+        });
+    }
+
+    public static void PrintChatErr(string msg)
+    {
+        ChatGui.PrintError(msg);
+    }
 }

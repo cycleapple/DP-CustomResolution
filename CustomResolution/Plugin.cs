@@ -177,23 +177,31 @@ public sealed unsafe class Plugin : IDalamudPlugin
             height = Service.Config.Height;
         }
 
-        if (width != dev->Width || height != dev->Height)
+        if (Service.Config.IsEnabled)
         {
-            Service.PluginLog.Info($"Changing resolution to {width} x {height}");
-
-            if (width < 256)
+            if (width != dev->Width || height != dev->Height)
             {
-                width = 256;
-            }
+                Service.PluginLog.Info($"Changing resolution to {width} x {height}");
 
-            if (height < 256)
-            {
-                height = 256;
-            }
+                if (width < 256)
+                {
+                    width = 256;
+                }
 
-            dev->NewWidth = width;
-            dev->NewHeight = height;
-            dev->RequestResolutionChange = 1;
+                if (height < 256)
+                {
+                    height = 256;
+                }
+
+                dev->NewWidth = width;
+                dev->NewHeight = height;
+                dev->RequestResolutionChange = 1;
+            }
+        }
+        else
+        {
+            width = dev->Width;
+            height = dev->Height;
         }
 
         CurrentWidth = width;

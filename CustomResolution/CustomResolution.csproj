@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Authors>0x0ade</Authors>
     <Company></Company>
-    <Version>0.1.0.1</Version>
+    <Version>0.1.0.2</Version>
     <Description></Description>
     <Copyright></Copyright>
     <PackageProjectUrl></PackageProjectUrl>
@@ -59,10 +59,6 @@
       <HintPath>$(DalamudLibPath)Serilog.dll</HintPath>
       <Private>false</Private>
     </Reference>
-  </ItemGroup>
-
-  <ItemGroup>
-    <Folder Include="Cmds\" />
   </ItemGroup>
 
 </Project>
