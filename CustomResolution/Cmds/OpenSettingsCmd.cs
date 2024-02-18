@@ -66,7 +66,7 @@ public sealed class OpenSettingsCmd : Cmd
                 return;
         }
 
-        if (!float.TryParse(arguments, out float value))
+        if (!float.TryParse(arguments, CultureInfo.InvariantCulture, out float value))
         {
             Service.PrintChat("Invalid parameters.");
             return;
