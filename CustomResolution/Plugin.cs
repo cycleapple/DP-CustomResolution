@@ -164,9 +164,11 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         uint width, height;
 
-        if (Service.Config.IsScale || _unloading)
+        bool disabled = _unloading || !Service.Config.IsEnabled;
+
+        if (Service.Config.IsScale || disabled)
         {
-            var scale = _unloading ? 1f : Service.Config.Scale;
+            var scale = disabled ? 1f : Service.Config.Scale;
 
             width = (uint) Math.Round(rectWidth * scale);
             height = (uint) Math.Round(rectHeight * scale);
@@ -177,32 +179,25 @@ public sealed unsafe class Plugin : IDalamudPlugin
             height = Service.Config.Height;
         }
 
-        if (Service.Config.IsEnabled)
+        if (width != dev->Width || height != dev->Height)
         {
-            if (width != dev->Width || height != dev->Height)
+            Service.PluginLog.Info($"Changing resolution to {width} x {height}");
+
+            if (width < 256)
             {
-                Service.PluginLog.Info($"Changing resolution to {width} x {height}");
-
-                if (width < 256)
-                {
-                    width = 256;
-                }
-
-                if (height < 256)
-                {
-                    height = 256;
-                }
-
-                dev->NewWidth = width;
-                dev->NewHeight = height;
-                dev->RequestResolutionChange = 1;
+                width = 256;
             }
+
+            if (height < 256)
+            {
+                height = 256;
+            }
+
+            dev->NewWidth = width;
+            dev->NewHeight = height;
+            dev->RequestResolutionChange = 1;
         }
-        else
-        {
-            width = dev->Width;
-            height = dev->Height;
-        }
+
 
         CurrentWidth = width;
         CurrentHeight = height;

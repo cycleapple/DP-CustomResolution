@@ -5,7 +5,7 @@ using System;
 
 namespace CustomResolution.Cmds;
 
-public sealed class OpenSettingsCmd : Cmd
+public sealed class MainCmd : Cmd
 {
     public override string Name => "cres";
 
@@ -20,7 +20,7 @@ public sealed class OpenSettingsCmd : Cmd
     {
         if (string.IsNullOrEmpty(arguments))
         {
-            ToggleOpen();
+            Service.PluginUI.SettingsVisible = !Service.PluginUI.SettingsVisible;
 
             return;
         }
@@ -77,10 +77,5 @@ public sealed class OpenSettingsCmd : Cmd
         Service.Config.Save();
 
         Service.PrintChat("Updated custom resolution scale.");
-    }
-
-    private void ToggleOpen()
-    {
-        Service.PluginUI.SettingsVisible = !Service.PluginUI.SettingsVisible;
     }
 }
