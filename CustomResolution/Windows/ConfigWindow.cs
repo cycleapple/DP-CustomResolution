@@ -76,10 +76,7 @@ public class ConfigWindow : Window, IDisposable
         }
         else
         {
-            if (ImGui.InputInt2("Size in pixels", ref _configWH[0], ImGuiInputTextFlags.EnterReturnsTrue))
-            {
-                save = true;
-            }
+            ImGui.InputInt2("Size in pixels", ref _configWH[0]);
         }
 
         if (ImGui.Button("Save and apply"))
