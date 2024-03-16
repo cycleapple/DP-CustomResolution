@@ -14,16 +14,13 @@ public class ConfigWindow : Window, IDisposable
     private bool _configIsScale;
     private float _configScale;
     private int[] _configWH = new int[2];
-    private bool _configIsDXVKDWMHackEnabled;
+    private DXVKDWMHackMode _configDXVKDWMHackMode;
 
     public ConfigWindow() : base(
         "CustomResolution",
         ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar |
-        ImGuiWindowFlags.NoScrollWithMouse)
+        ImGuiWindowFlags.NoScrollWithMouse | ImGuiWindowFlags.AlwaysAutoResize)
     {
-        Size = new Vector2(430, 212);
-        SizeCondition = ImGuiCond.Always;
-
         UpdateFromConfig();
     }
 
@@ -39,7 +36,7 @@ public class ConfigWindow : Window, IDisposable
         _configScale = config.Scale;
         _configWH[0] = (int) config.Width;
         _configWH[1] = (int) config.Height;
-        _configIsDXVKDWMHackEnabled = config.IsDXVKDWMHackEnabled;
+        _configDXVKDWMHackMode = config.DXVKDWMHackMode;
     }
 
     public void UpdateToConfig()
@@ -51,7 +48,7 @@ public class ConfigWindow : Window, IDisposable
         config.Scale = _configScale;
         config.Width = (uint) _configWH[0];
         config.Height = (uint) _configWH[1];
-        config.IsDXVKDWMHackEnabled = _configIsDXVKDWMHackEnabled;
+        config.DXVKDWMHackMode = _configDXVKDWMHackMode;
 
         config.Save();
     }
@@ -97,13 +94,31 @@ public class ConfigWindow : Window, IDisposable
             ImGui.EndDisabled();
         }
 
-        ImGui.Checkbox("Apply borderless window workaround", ref _configIsDXVKDWMHackEnabled);
+        if (ImGui.BeginCombo("Borderless window workaround", _configDXVKDWMHackMode.ToHumanNameString()))
+        {
+            foreach (var mode in Enum.GetValues<DXVKDWMHackMode>())
+            {
+                if (ImGui.Selectable(mode.ToHumanNameString(), _configDXVKDWMHackMode == mode, ImGuiSelectableFlags.None))
+                {
+                    _configDXVKDWMHackMode = mode;
+                }
+
+                if (ImGui.IsItemHovered() && mode.ToHumanInfoString() is { } info)
+                {
+                    ImGui.SetTooltip(info);
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(@"Fixes DXVK borderless window acting like exclusive fullscreen.
-In other words: Fixes black screen flashing when alt-tabbing.
+            ImGui.SetTooltip(@"Fixes DXVK borderless window causing black screens when alt-tabbing.
 This can *possibly* impact performance, depending on your Windows version and GPU.
+
 Feel free to experiment with this toggle.
+Make sure to switch the game to windowed and then back to borderless windowed when changing.
 
 Works even with the scaling above disabled.
 

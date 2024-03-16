@@ -4,16 +4,14 @@ using System;
 using System.Linq;
 using System.Reflection.Emit;
 using TerraFX.Interop.Windows;
+using static TerraFX.Interop.Windows.Windows;
 
 
 namespace CustomResolution.Hooks;
 
 // THIS. IS. UGLY.
-public sealed class WndProcHook : IDisposable
+public sealed unsafe class WndProcHook : IDisposable
 {
-    private const uint WM_MOUSEFIRST = 0x0200;
-    private const uint WM_MOUSELAST = 0x0209;
-
     private static WndProcHook? _instance;
 
     private readonly WndProcHookManager _manager;
@@ -75,24 +73,45 @@ public sealed class WndProcHook : IDisposable
 
     private void Invoke(WndProcEventArgs args)
     {
-        if (!(WM_MOUSEFIRST <= args.Message && args.Message <= WM_MOUSELAST))
+        if (Service.Plugin is not { } plugin)
         {
             return;
         }
 
-        ParamToCoords(args.LParam, out int x, out int y);
+        if (WM.WM_MOUSEFIRST <= args.Message && args.Message <= WM.WM_MOUSELAST)
+        {
+            ParamToCoords(args.LParam, out int x, out int y);
 
 #if false
-        Service.PluginLog.Debug($"WM_MOUSE A @ {x} {y}");
+            Service.PluginLog.Debug($"WM_MOUSE A @ {x} {y}");
 #endif
 
-        Service.Plugin.ConvertCoordsWinToGame(ref x, ref y);
+            plugin.ConvertCoordsWinToGame(ref x, ref y);
 
 #if false
-        Service.PluginLog.Debug($"WM_MOUSE B @ {x} {y}");
+            Service.PluginLog.Debug($"WM_MOUSE B @ {x} {y}");
 #endif
 
-        args.LParam = CoordsToParam(x, y);
+            args.LParam = CoordsToParam(x, y);
+        }
+
+        if (args.Message == WM.WM_NCCALCSIZE && args.WParam != 0 && plugin.CurrentBorderlessFullscreen &&
+            Service.Config.DXVKDWMHackMode >= DXVKDWMHackMode.SetClientEdge)
+        {
+            NCCALCSIZE_PARAMS* ncsize = (NCCALCSIZE_PARAMS*) args.LParam;
+            MONITORINFO monitorInfo = new()
+            {
+                cbSize = (uint) sizeof(MONITORINFO)
+            };
+
+            if (MonitorFromWindow(plugin.CurrentHWND, MONITOR.MONITOR_DEFAULTTONEAREST) is { } monitor && monitor != HMONITOR.NULL &&
+                GetMonitorInfo(monitor, &monitorInfo))
+            {
+                ncsize->rgrc[0] = monitorInfo.rcMonitor;
+
+                args.SuppressCall = true;
+            }
+        }
     }
 
     private void Apply()

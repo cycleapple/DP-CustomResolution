@@ -15,7 +15,7 @@ public class Configuration : IPluginConfiguration
     public uint Width = 1024;
     public uint Height = 1024;
 
-    public bool IsDXVKDWMHackEnabled = false;
+    public DXVKDWMHackMode DXVKDWMHackMode = DXVKDWMHackMode.Off;
 
     [NonSerialized]
     private DalamudPluginInterface? pluginInterface;
@@ -29,4 +29,30 @@ public class Configuration : IPluginConfiguration
     {
         pluginInterface!.SavePluginConfig(this);
     }
+}
+
+// Must explicitly map to integer values, blame Newtonsoft.JSON
+public enum DXVKDWMHackMode
+{
+    Off = 0,
+    UnsetPopup = 1,
+    SetClientEdge = 2
+}
+
+public static class DXVKDWMHackModeExt
+{
+    public static string ToHumanNameString(this DXVKDWMHackMode mode) => mode switch
+    {
+        DXVKDWMHackMode.Off => "Off",
+        DXVKDWMHackMode.UnsetPopup => "Best case: Disable WS_POPUP",
+        DXVKDWMHackMode.SetClientEdge => "Worst case: Enable WS_EX_CLIENTEDGE",
+        _ => mode.ToString(),
+    };
+
+    public static string? ToHumanInfoString(this DXVKDWMHackMode mode) => mode switch
+    {
+        DXVKDWMHackMode.UnsetPopup => "Works best with NVIDIA GPUs.",
+        DXVKDWMHackMode.SetClientEdge => "Adds a 2 pixel border around the game.",
+        _ => null
+    };
 }

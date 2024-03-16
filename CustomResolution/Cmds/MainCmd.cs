@@ -64,6 +64,21 @@ public sealed class MainCmd : Cmd
                 Service.Config.Save();
                 Service.PrintChat($"{(Service.Config.IsEnabled ? "Enabled" : "Disabled")} custom resolution.");
                 return;
+
+            case "debugon":
+                Service.Plugin.IsDebug = true;
+                Service.PrintChat("Enabled cres debug.");
+                return;
+
+            case "debugoff":
+                Service.Plugin.IsDebug = false;
+                Service.PrintChat("Disabled cres debug.");
+                return;
+
+            case "debug":
+                Service.Plugin.IsDebug = !Service.Plugin.IsDebug;
+                Service.PrintChat($"{(Service.Plugin.IsDebug ? "Enabled" : "Disabled")} cres debug.");
+                return;
         }
 
         if (!float.TryParse(arguments, CultureInfo.InvariantCulture, out float value))

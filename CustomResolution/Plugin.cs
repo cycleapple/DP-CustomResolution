@@ -22,7 +22,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private HWND _currentHwnd;
     private RECT _currentClientRect;
     private RECT _currentWindowRect;
-    private bool _currentDXVKDWMHack = false;
+    private DXVKDWMHackMode _currentDXVKDWMHackMode = DXVKDWMHackMode.Off;
 
     public Plugin([RequiredVersion("1.0")] DalamudPluginInterface pluginInterface)
     {
@@ -55,10 +55,16 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public string Name => "CustomResolution";
 
+    public HWND CurrentHWND { get; private set; }
+
     public uint CurrentWidth { get; private set; }
     public uint CurrentHeight { get; private set; }
     public uint CurrentWindowWidth { get; private set; }
     public uint CurrentWindowHeight { get; private set; }
+
+    public bool CurrentBorderlessFullscreen { get; private set; }
+
+    public bool IsDebug { get; set; }
 
     public void Dispose()
     {
@@ -204,10 +210,43 @@ public sealed unsafe class Plugin : IDalamudPlugin
             dev->RequestResolutionChange = 1;
         }
 
-        if (Service.Config.IsDXVKDWMHackEnabled && !_unloading)
+        // TODO: This isn't accurate! Figure out how to read the game's settings instead.
+        CurrentBorderlessFullscreen = (GetWindowLong(_currentHwnd, GWL.GWL_STYLE) & WS.WS_SYSMENU) == 0;
+
+        if (Service.Config.DXVKDWMHackMode != DXVKDWMHackMode.Off && !_unloading)
         {
-#if false
-            Service.PluginLog.Info($"STYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_STYLE):X8}");
+            SetDXVKDWMHack(Service.Config.DXVKDWMHackMode);
+        }
+        else if (Service.Config.DXVKDWMHackMode == DXVKDWMHackMode.Off && _currentDXVKDWMHackMode != DXVKDWMHackMode.Off)
+        {
+            SetDXVKDWMHack(DXVKDWMHackMode.Off);
+        }
+
+        CurrentWidth = width;
+        CurrentHeight = height;
+        CurrentWindowWidth = (uint) rectWidth;
+        CurrentWindowHeight = (uint) rectHeight;
+    }
+
+    private void SetDXVKDWMHack(DXVKDWMHackMode mode)
+    {
+        /* Default maximized style / exstyle is 0x95000000 / 0.
+         * WS.WS_POPUP | WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_MAXIMIZE
+         * Default windowed style / exstyle is 0x14CF0000 / 0.
+         * WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_CAPTION | WS.WS_SYSMENU | WS.WS_THICKFRAME | WS.WS_MINIMIZEBOX | WS.WS_MAXIMIZEBOX
+         */
+        uint styleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_STYLE);
+        uint exstyleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE);
+
+        uint style = styleOrig;
+        uint exstyle = exstyleOrig;
+
+        bool fullscreen = (style & WS.WS_SYSMENU) == 0;
+
+        if (IsDebug)
+        {
+            Service.PluginLog.Info("--------");
+            Service.PluginLog.Info($"STYLE: 0x{style:X8}");
             Service.PluginLog.Info($"EXSTYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE):X8}");
 
             Span<ushort> name = stackalloc ushort[256];
@@ -217,41 +256,11 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
             Service.PluginLog.Info($"CLASS: {new string((char*) name.GetPointer(0))}");
             Service.PluginLog.Info($"CLASS.style: 0x{wce.style:X8}");
-#endif
-
-            SetDXVKDWMHack(true);
         }
-        else if (!Service.Config.IsDXVKDWMHackEnabled && _currentDXVKDWMHack)
-        {
-            SetDXVKDWMHack(false);
-        }
-
-        _currentDXVKDWMHack = Service.Config.IsDXVKDWMHackEnabled;
-
-        CurrentWidth = width;
-        CurrentHeight = height;
-        CurrentWindowWidth = (uint) rectWidth;
-        CurrentWindowHeight = (uint) rectHeight;
-    }
-
-    private void SetDXVKDWMHack(bool enabled)
-    {
-        /* Default maximized style / exstyle is 0x95000000 / 0.
-         * WS.WS_POPUP | WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_MAXIMIZE
-         * Default windowed style / exstyle is 0x14CF0000 / 0.
-         * WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_CAPTION | WS.WS_SYSMENU | WS.WS_THICKFRAME | WS.WS_MINIMIZEBOX | WS.WS_MAXIMIZEBOX
-         */
-
-        uint style = (uint) GetWindowLong(_currentHwnd, GWL.GWL_STYLE);
-        bool fullscreen = (style & WS.WS_SYSMENU) == 0;
-
-        /* Alternative hacks:
-         * - WS_EX_CLIENTEDGE, at the cost of having a 2px border on each side.
-         */
 
         if (fullscreen)
         {
-            if (enabled)
+            if (mode >= DXVKDWMHackMode.UnsetPopup)
             {
                 style &= ~WS.WS_POPUP;
             }
@@ -261,7 +270,42 @@ public sealed unsafe class Plugin : IDalamudPlugin
             }
         }
 
-        SetWindowLong(_currentHwnd, GWL.GWL_STYLE, (int) style);
+        if (fullscreen && mode >= DXVKDWMHackMode.SetClientEdge)
+        {
+            exstyle |= WS.WS_EX_CLIENTEDGE;
+            exstyle |= WS.WS_EX_COMPOSITED;
+        }
+        else
+        {
+            exstyle &= ~(uint) WS.WS_EX_CLIENTEDGE;
+            exstyle &= ~(uint) WS.WS_EX_COMPOSITED;
+        }
+
+        if (IsDebug)
+        {
+            Service.PluginLog.Info($"NEWSTYLE: 0x{style:X8}");
+            Service.PluginLog.Info($"NEWEXSTYLE: 0x{exstyle:X8}");
+        }
+
+        if (style != styleOrig || exstyle != exstyleOrig)
+        {
+            if (IsDebug)
+            {
+                Service.PluginLog.Info("UPDATE");
+            }
+
+            SetWindowLong(_currentHwnd, GWL.GWL_STYLE, (int) style);
+            SetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE, (int) exstyle);
+
+            SetWindowPos(_currentHwnd, HWND.NULL, 0, 0, 0, 0, SWP.SWP_NOZORDER | SWP.SWP_NOMOVE | SWP.SWP_NOSIZE | SWP.SWP_NOACTIVATE | SWP.SWP_DRAWFRAME);
+            ShowWindow(_currentHwnd, SW.SW_SHOW);
+        }
+        else if (IsDebug)
+        {
+            Service.PluginLog.Info("SAME");
+        }
+
+        _currentDXVKDWMHackMode = mode;
     }
 
     private void OnFrameworkUpdate(IFramework framework)
