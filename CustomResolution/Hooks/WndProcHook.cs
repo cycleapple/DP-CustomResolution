@@ -108,6 +108,7 @@ public sealed unsafe class WndProcHook : IDisposable
                 GetMonitorInfo(monitor, &monitorInfo))
             {
                 ncsize->rgrc[0] = monitorInfo.rcMonitor;
+                ncsize->rgrc[0].bottom += 1;
 
                 args.SuppressCall = true;
             }

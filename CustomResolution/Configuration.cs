@@ -44,15 +44,15 @@ public static class DXVKDWMHackModeExt
     public static string ToHumanNameString(this DXVKDWMHackMode mode) => mode switch
     {
         DXVKDWMHackMode.Off => "Off",
-        DXVKDWMHackMode.UnsetPopup => "Best case: Disable WS_POPUP",
-        DXVKDWMHackMode.SetClientEdge => "Worst case: Enable WS_EX_CLIENTEDGE",
+        DXVKDWMHackMode.UnsetPopup => "Best: -WS_POPUP",
+        DXVKDWMHackMode.SetClientEdge => "Worst: +WS_EX_CLIENTEDGE",
         _ => mode.ToString(),
     };
 
     public static string? ToHumanInfoString(this DXVKDWMHackMode mode) => mode switch
     {
-        DXVKDWMHackMode.UnsetPopup => "Works best with NVIDIA GPUs.",
-        DXVKDWMHackMode.SetClientEdge => "Adds a 2 pixel border around the game.",
+        DXVKDWMHackMode.UnsetPopup => "Least intrusive option, doesn't work everywhere.\nWorks best with NVIDIA GPUs.",
+        DXVKDWMHackMode.SetClientEdge => "Extends the game window 1 pixel to the bottom.\nCauses problems in proper \"Full Screen\" mode!",
         _ => null
     };
 }

@@ -260,7 +260,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         if (fullscreen)
         {
-            if (mode >= DXVKDWMHackMode.UnsetPopup)
+            if (mode == DXVKDWMHackMode.UnsetPopup)
             {
                 style &= ~WS.WS_POPUP;
             }
@@ -287,7 +287,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             Service.PluginLog.Info($"NEWEXSTYLE: 0x{exstyle:X8}");
         }
 
-        if (style != styleOrig || exstyle != exstyleOrig)
+        if (style != styleOrig || exstyle != exstyleOrig || _currentDXVKDWMHackMode != mode)
         {
             if (IsDebug)
             {
