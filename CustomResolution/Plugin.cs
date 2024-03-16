@@ -270,7 +270,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             }
         }
 
-        if (fullscreen && mode >= DXVKDWMHackMode.SetClientEdge)
+        if (fullscreen && mode.IsSetClientEdge())
         {
             exstyle |= WS.WS_EX_CLIENTEDGE;
             exstyle |= WS.WS_EX_COMPOSITED;

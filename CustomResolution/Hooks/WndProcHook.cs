@@ -96,7 +96,7 @@ public sealed unsafe class WndProcHook : IDisposable
         }
 
         if (args.Message == WM.WM_NCCALCSIZE && args.WParam != 0 && plugin.CurrentBorderlessFullscreen &&
-            Service.Config.DXVKDWMHackMode >= DXVKDWMHackMode.SetClientEdge)
+            Service.Config.DXVKDWMHackMode.IsSetClientEdge())
         {
             NCCALCSIZE_PARAMS* ncsize = (NCCALCSIZE_PARAMS*) args.LParam;
             MONITORINFO monitorInfo = new()
@@ -108,10 +108,25 @@ public sealed unsafe class WndProcHook : IDisposable
                 GetMonitorInfo(monitor, &monitorInfo))
             {
                 ncsize->rgrc[0] = monitorInfo.rcMonitor;
-                ncsize->rgrc[0].bottom += 1;
+
+                switch (Service.Config.DXVKDWMHackMode)
+                {
+                    case DXVKDWMHackMode.SetClientEdgeResize:
+                        ncsize->rgrc[0].bottom += 1;
+                        break;
+
+                    case DXVKDWMHackMode.SetClientEdgeBorder:
+                        ncsize->rgrc[0].left += 1;
+                        ncsize->rgrc[0].top += 1;
+                        ncsize->rgrc[0].right -= 1;
+                        ncsize->rgrc[0].bottom -= 1;
+                        break;
+                }
 
                 args.SuppressCall = true;
             }
+
+            // TODO: Check if border + repaing nc area to black works? Otherwise unset composited
         }
     }
 

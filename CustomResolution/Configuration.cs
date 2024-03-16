@@ -36,7 +36,8 @@ public enum DXVKDWMHackMode
 {
     Off = 0,
     UnsetPopup = 1,
-    SetClientEdge = 2
+    SetClientEdgeResize = 3,
+    SetClientEdgeBorder = 2,
 }
 
 public static class DXVKDWMHackModeExt
@@ -45,14 +46,25 @@ public static class DXVKDWMHackModeExt
     {
         DXVKDWMHackMode.Off => "Off",
         DXVKDWMHackMode.UnsetPopup => "Best: -WS_POPUP",
-        DXVKDWMHackMode.SetClientEdge => "Worst: +WS_EX_CLIENTEDGE",
+        DXVKDWMHackMode.SetClientEdgeResize => "+WS_EX_CLIENTEDGE (resize)",
+        DXVKDWMHackMode.SetClientEdgeBorder => "+WS_EX_CLIENTEDGE (border)",
         _ => mode.ToString(),
     };
 
     public static string? ToHumanInfoString(this DXVKDWMHackMode mode) => mode switch
     {
-        DXVKDWMHackMode.UnsetPopup => "Least intrusive option, doesn't work everywhere.\nWorks best with NVIDIA GPUs.",
-        DXVKDWMHackMode.SetClientEdge => "Extends the game window 1 pixel to the bottom.\nCauses problems in proper \"Full Screen\" mode!",
+        DXVKDWMHackMode.UnsetPopup => "Least intrusive option, try this first.\nWorks best with NVIDIA GPUs.",
+        DXVKDWMHackMode.SetClientEdgeResize => "Extends the game window 1 pixel to the bottom.\nDon't use if it makes text look blurry!",
+        DXVKDWMHackMode.SetClientEdgeBorder => "Adds a 1 pixel border around the game.",
         _ => null
+    };
+
+    public static bool IsUnsetPopup(this DXVKDWMHackMode mode) => mode == DXVKDWMHackMode.UnsetPopup;
+
+    public static bool IsSetClientEdge(this DXVKDWMHackMode mode) => mode switch
+    {
+        DXVKDWMHackMode.SetClientEdgeResize => true,
+        DXVKDWMHackMode.SetClientEdgeBorder => true,
+        _ => false
     };
 }
