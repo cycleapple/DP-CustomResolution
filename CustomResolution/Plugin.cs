@@ -3,25 +3,31 @@ using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.Interop;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using TerraFX.Interop.Windows;
-using static FFXIVClientStructs.FFXIV.Client.UI.Misc.GroupPoseModule;
+using static TerraFX.Interop.Windows.Windows;
 
 namespace CustomResolution;
 
 public sealed unsafe class Plugin : IDalamudPlugin
 {
+    private readonly HRGN _invisibleRgn;
+
     private readonly List<Cmd> _cmds;
     private bool _unloading = false;
     private int _tickCount = 0;
     private HWND _currentHwnd;
     private RECT _currentClientRect;
     private RECT _currentWindowRect;
+    private bool _currentDXVKDWMHack = false;
 
     public Plugin([RequiredVersion("1.0")] DalamudPluginInterface pluginInterface)
     {
+        _invisibleRgn = CreateRectRgn(0, 0, -1, -1);
+
         pluginInterface.Create<Service>();
 
         Service.Plugin = this;
@@ -116,12 +122,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         var p = new POINT(x, y);
 
-        TerraFX.Interop.Windows.Windows.ScreenToClient(_currentHwnd, &p);
+        ScreenToClient(_currentHwnd, &p);
 
         p.x = (int) Math.Round(p.x * scaleX);
         p.y = (int) Math.Round(p.y * scaleY);
 
-        TerraFX.Interop.Windows.Windows.ClientToScreen(_currentHwnd, &p);
+        ClientToScreen(_currentHwnd, &p);
 
         x = p.x;
         y = p.y;
@@ -139,12 +145,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         var p = new POINT(x, y);
 
-        TerraFX.Interop.Windows.Windows.ScreenToClient(_currentHwnd, &p);
+        ScreenToClient(_currentHwnd, &p);
 
         p.x = (int) Math.Round(p.x * scaleX);
         p.y = (int) Math.Round(p.y * scaleY);
 
-        TerraFX.Interop.Windows.Windows.ClientToScreen(_currentHwnd, &p);
+        ClientToScreen(_currentHwnd, &p);
 
         x = p.x;
         y = p.y;
@@ -198,11 +204,64 @@ public sealed unsafe class Plugin : IDalamudPlugin
             dev->RequestResolutionChange = 1;
         }
 
+        if (Service.Config.IsDXVKDWMHackEnabled && !_unloading)
+        {
+#if false
+            Service.PluginLog.Info($"STYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_STYLE):X8}");
+            Service.PluginLog.Info($"EXSTYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE):X8}");
+
+            Span<ushort> name = stackalloc ushort[256];
+            GetClassName(_currentHwnd, name.GetPointer(0), name.Length);
+            WNDCLASSEXW wce;
+            GetClassInfoEx(GetModuleHandle(null), name.GetPointer(0), &wce);
+
+            Service.PluginLog.Info($"CLASS: {new string((char*) name.GetPointer(0))}");
+            Service.PluginLog.Info($"CLASS.style: 0x{wce.style:X8}");
+#endif
+
+            SetDXVKDWMHack(true);
+        }
+        else if (!Service.Config.IsDXVKDWMHackEnabled && _currentDXVKDWMHack)
+        {
+            SetDXVKDWMHack(false);
+        }
+
+        _currentDXVKDWMHack = Service.Config.IsDXVKDWMHackEnabled;
 
         CurrentWidth = width;
         CurrentHeight = height;
         CurrentWindowWidth = (uint) rectWidth;
         CurrentWindowHeight = (uint) rectHeight;
+    }
+
+    private void SetDXVKDWMHack(bool enabled)
+    {
+        /* Default maximized style / exstyle is 0x95000000 / 0.
+         * WS.WS_POPUP | WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_MAXIMIZE
+         * Default windowed style / exstyle is 0x14CF0000 / 0.
+         * WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_CAPTION | WS.WS_SYSMENU | WS.WS_THICKFRAME | WS.WS_MINIMIZEBOX | WS.WS_MAXIMIZEBOX
+         */
+
+        uint style = (uint) GetWindowLong(_currentHwnd, GWL.GWL_STYLE);
+        bool fullscreen = (style & WS.WS_SYSMENU) == 0;
+
+        /* Alternative hacks:
+         * - WS_EX_CLIENTEDGE, at the cost of having a 2px border on each side.
+         */
+
+        if (fullscreen)
+        {
+            if (enabled)
+            {
+                style &= ~WS.WS_POPUP;
+            }
+            else
+            {
+                style |= WS.WS_POPUP;
+            }
+        }
+
+        SetWindowLong(_currentHwnd, GWL.GWL_STYLE, (int) style);
     }
 
     private void OnFrameworkUpdate(IFramework framework)
@@ -214,8 +273,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         fixed (RECT* currentClientRectPtr = &_currentClientRect)
         fixed (RECT* currentWindowRectPtr = &_currentWindowRect)
         {
-            TerraFX.Interop.Windows.Windows.GetClientRect(_currentHwnd, currentClientRectPtr);
-            TerraFX.Interop.Windows.Windows.GetWindowRect(_currentHwnd, currentWindowRectPtr);
+            GetClientRect(_currentHwnd, currentClientRectPtr);
+            GetWindowRect(_currentHwnd, currentWindowRectPtr);
         }
 
         if (_tickCount++ >= 10)

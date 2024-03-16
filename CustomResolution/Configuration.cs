@@ -15,6 +15,8 @@ public class Configuration : IPluginConfiguration
     public uint Width = 1024;
     public uint Height = 1024;
 
+    public bool IsDXVKDWMHackEnabled = false;
+
     [NonSerialized]
     private DalamudPluginInterface? pluginInterface;
 
@@ -27,18 +29,4 @@ public class Configuration : IPluginConfiguration
     {
         pluginInterface!.SavePluginConfig(this);
     }
-}
-
-public enum CullingMode
-{
-    None,
-    OnlyInFront,
-    OnlyInView
-}
-
-public enum DutyMode
-{
-    Always,
-    OutsideContent,
-    InContent
 }

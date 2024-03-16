@@ -14,13 +14,14 @@ public class ConfigWindow : Window, IDisposable
     private bool _configIsScale;
     private float _configScale;
     private int[] _configWH = new int[2];
+    private bool _configIsDXVKDWMHackEnabled;
 
     public ConfigWindow() : base(
         "CustomResolution",
         ImGuiWindowFlags.NoResize | ImGuiWindowFlags.NoCollapse | ImGuiWindowFlags.NoScrollbar |
         ImGuiWindowFlags.NoScrollWithMouse)
     {
-        Size = new Vector2(430, 184);
+        Size = new Vector2(430, 212);
         SizeCondition = ImGuiCond.Always;
 
         UpdateFromConfig();
@@ -38,6 +39,7 @@ public class ConfigWindow : Window, IDisposable
         _configScale = config.Scale;
         _configWH[0] = (int) config.Width;
         _configWH[1] = (int) config.Height;
+        _configIsDXVKDWMHackEnabled = config.IsDXVKDWMHackEnabled;
     }
 
     public void UpdateToConfig()
@@ -49,6 +51,7 @@ public class ConfigWindow : Window, IDisposable
         config.Scale = _configScale;
         config.Width = (uint) _configWH[0];
         config.Height = (uint) _configWH[1];
+        config.IsDXVKDWMHackEnabled = _configIsDXVKDWMHackEnabled;
 
         config.Save();
     }
@@ -70,6 +73,11 @@ public class ConfigWindow : Window, IDisposable
 
         ImGui.Checkbox("Enabled", ref _configIsEnabled);
 
+        if (!_configIsEnabled)
+        {
+            ImGui.BeginDisabled();
+        }
+
         ImGui.Checkbox("Use scale", ref _configIsScale);
 
         if (_configIsScale)
@@ -82,6 +90,24 @@ public class ConfigWindow : Window, IDisposable
         else
         {
             ImGui.InputInt2("Size in pixels", ref _configWH[0]);
+        }
+
+        if (!_configIsEnabled)
+        {
+            ImGui.EndDisabled();
+        }
+
+        ImGui.Checkbox("Apply borderless window workaround", ref _configIsDXVKDWMHackEnabled);
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(@"Fixes DXVK borderless window acting like exclusive fullscreen.
+In other words: Fixes black screen flashing when alt-tabbing.
+This can *possibly* impact performance, depending on your Windows version and GPU.
+Feel free to experiment with this toggle.
+
+Works even with the scaling above disabled.
+
+Not intended to be used with proper fullscreen.");
         }
 
         if (ImGui.Button("Save and apply"))

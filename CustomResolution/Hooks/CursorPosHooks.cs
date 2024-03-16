@@ -34,6 +34,7 @@ public sealed unsafe class CursorPosHooks : IDisposable
     public void Dispose()
     {
         _getCursorPosHook.Dispose();
+        _setCursorPosHook.Dispose();
     }
 
     private bool GetCursorPosDetour(POINT* lpPoint)
