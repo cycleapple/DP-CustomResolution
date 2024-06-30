@@ -18,7 +18,7 @@ public sealed class Service
     public static CursorPosHooks CursorPosHooks { get; internal set; } = null!;
 
     [PluginService]
-    public static DalamudPluginInterface PluginInterface { get; private set; } = null!;
+    public static IDalamudPluginInterface PluginInterface { get; private set; } = null!;
 
     [PluginService]
     public static ICommandManager CommandManager { get; private set; } = null!;

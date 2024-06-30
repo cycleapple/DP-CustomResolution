@@ -24,7 +24,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private RECT _currentWindowRect;
     private DXVKDWMHackMode _currentDXVKDWMHackMode = DXVKDWMHackMode.Off;
 
-    public Plugin([RequiredVersion("1.0")] DalamudPluginInterface pluginInterface)
+    public Plugin(IDalamudPluginInterface pluginInterface)
     {
         _invisibleRgn = CreateRectRgn(0, 0, -1, -1);
 
@@ -249,7 +249,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             Service.PluginLog.Info($"STYLE: 0x{style:X8}");
             Service.PluginLog.Info($"EXSTYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE):X8}");
 
-            Span<ushort> name = stackalloc ushort[256];
+            Span<char> name = stackalloc char[512];
             GetClassName(_currentHwnd, name.GetPointer(0), name.Length);
             WNDCLASSEXW wce;
             GetClassInfoEx(GetModuleHandle(null), name.GetPointer(0), &wce);

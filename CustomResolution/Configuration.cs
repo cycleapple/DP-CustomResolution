@@ -18,9 +18,9 @@ public class Configuration : IPluginConfiguration
     public DXVKDWMHackMode DXVKDWMHackMode = DXVKDWMHackMode.Off;
 
     [NonSerialized]
-    private DalamudPluginInterface? pluginInterface;
+    private IDalamudPluginInterface? pluginInterface;
 
-    internal void Initialize(DalamudPluginInterface pluginInterface)
+    internal void Initialize(IDalamudPluginInterface pluginInterface)
     {
         this.pluginInterface = pluginInterface;
     }
