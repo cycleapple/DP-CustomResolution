@@ -10,9 +10,9 @@
       },
       "TerraFX.Interop.Windows": {
         "type": "Direct",
-        "requested": "[10.0.22621.6, )",
-        "resolved": "10.0.22621.6",
-        "contentHash": "IFjdtFFta+8awzDLCVSJMin+GBmkncFmVCUIPY4NWGPeQNoA99kFXXBgE3zNOXQ7yafnlAldUiarno0X/U0heA=="
+        "requested": "[10.0.22621.2, )",
+        "resolved": "10.0.22621.2",
+        "contentHash": "lORoYCoURS33Vi7PDvubRugLF2+l5v3rX2oVEqNhpBLjs3aZpqapRvTHPKVwsC+dGrsGuqJ/3yXuxVUb0vl3vg=="
       }
     }
   }
