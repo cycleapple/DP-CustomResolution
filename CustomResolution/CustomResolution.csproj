@@ -3,7 +3,7 @@
   <PropertyGroup>
     <Authors>0x0ade</Authors>
     <Company></Company>
-    <Version>0.2.0.3</Version>
+    <Version>0.2.0.4</Version>
     <Description></Description>
     <Copyright></Copyright>
     <PackageProjectUrl></PackageProjectUrl>
@@ -25,7 +25,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="DalamudPackager" Version="2.1.13" />
+    <PackageReference Include="DalamudPackager" Version="11.0.0" />
     <PackageReference Include="TerraFX.Interop.Windows" Version="10.0.22621.2" />
     <Reference Include="FFXIVClientStructs">
       <HintPath>$(DalamudLibPath)FFXIVClientStructs.dll</HintPath>
