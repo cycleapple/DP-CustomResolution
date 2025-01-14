@@ -38,6 +38,9 @@ public sealed class Service
     [PluginService]
     public static IChatGui ChatGui { get; private set; } = null!;
 
+    [PluginService]
+    public static IKeyState KeyState { get; private set; } = null!;
+
     public static void PrintChat(string msg)
     {
         ChatGui.Print(new XivChatEntry

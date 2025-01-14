@@ -1,6 +1,9 @@
 ﻿using Dalamud.Configuration;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin;
 using System;
+using System.Collections.Generic;
+using System.Reflection;
 
 namespace CustomResolution;
 
@@ -14,6 +17,9 @@ public class Configuration : IPluginConfiguration
     public float Scale = 1f;
     public uint Width = 1024;
     public uint Height = 1024;
+
+    public VirtualKey HotkeyKey = VirtualKey.NO_KEY;
+    public ModifierKey HotkeyModifier = ModifierKey.NONE;
 
     public DXVKDWMHackMode DXVKDWMHackMode = DXVKDWMHackMode.Off;
 
@@ -66,5 +72,54 @@ public static class DXVKDWMHackModeExt
         DXVKDWMHackMode.SetClientEdgeResize => true,
         DXVKDWMHackMode.SetClientEdgeBorder => true,
         _ => false
+    };
+}
+
+public enum ModifierKey
+{
+    NONE = 0,
+    CTRL = 1,
+    ALT = 2,
+    SHIFT = 4
+}
+
+public static class VirtualKeyExt
+{
+    private static readonly Dictionary<VirtualKey, string> _strings = new();
+
+    static VirtualKeyExt()
+    {
+        foreach (var field in typeof(VirtualKey).GetFields(BindingFlags.Public | BindingFlags.Static))
+        {
+            var key = (VirtualKey) field.GetValue(null)!;
+            _strings[key] = key.GetFancyName();
+        }
+    }
+
+    public static string ToHumanNameString(this VirtualKey mode)
+    {
+        return _strings[mode];
+    }
+
+    public static string? ToHumanInfoString(this VirtualKey mode) => mode switch
+    {
+        _ => null
+    };
+}
+
+public static class ModifierKeyExt
+{
+    public static string ToHumanNameString(this ModifierKey mode) => mode switch
+    {
+        ModifierKey.NONE => "None",
+        ModifierKey.CTRL => "Ctrl",
+        ModifierKey.ALT => "Alt",
+        ModifierKey.SHIFT => "Shift",
+        _ => mode.ToString(),
+    };
+
+    public static string? ToHumanInfoString(this ModifierKey mode) => mode switch
+    {
+        _ => null
     };
 }

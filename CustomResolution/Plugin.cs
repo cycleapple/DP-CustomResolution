@@ -1,9 +1,12 @@
-﻿using Dalamud.IoC;
+﻿using Dalamud.Game.ClientState.Keys;
+using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.UI;
+using FFXIVClientStructs.FFXIV.Common.Lua;
 using FFXIVClientStructs.Interop;
+using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -14,6 +17,8 @@ namespace CustomResolution;
 
 public sealed unsafe class Plugin : IDalamudPlugin
 {
+    private object _disposeLock = new();
+
     private readonly HRGN _invisibleRgn;
 
     private readonly List<Cmd> _cmds;
@@ -68,12 +73,16 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public void Dispose()
     {
-        _tickCount = 0;
         _unloading = true;
 
-        Service.Framework.Update -= OnFrameworkUpdate;
+        lock (_disposeLock)
+        {
+            _tickCount = 0;
 
-        Service.Framework.RunOnFrameworkThread(Update);
+            Service.Framework.Update -= OnFrameworkUpdate;
+
+            Service.Framework.RunOnFrameworkThread(Update);
+        }
 
         foreach (Cmd cmd in _cmds)
         {
@@ -310,24 +319,44 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdate(IFramework framework)
     {
-        var dev = Device.Instance();
-
-        _currentHwnd = (HWND) (IntPtr) dev->hWnd;
-
-        fixed (RECT* currentClientRectPtr = &_currentClientRect)
-        fixed (RECT* currentWindowRectPtr = &_currentWindowRect)
+        lock (_disposeLock)
         {
-            GetClientRect(_currentHwnd, currentClientRectPtr);
-            GetWindowRect(_currentHwnd, currentWindowRectPtr);
+            var io = ImGui.GetIO();
+
+            if (Service.Config.HotkeyKey != VirtualKey.NO_KEY &&
+                (ImGuiNative.igIsKeyPressed((ImGuiKey) Service.Config.HotkeyKey, 0) != 0 || Service.KeyState.GetRawValue(Service.Config.HotkeyKey) != 0) &&
+                (Service.Config.HotkeyModifier switch
+                {
+                    ModifierKey.NONE => !io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
+                    ModifierKey.CTRL => io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
+                    ModifierKey.ALT => !io.KeyCtrl && io.KeyAlt && !io.KeyShift,
+                    ModifierKey.SHIFT => !io.KeyCtrl && !io.KeyAlt && io.KeyShift,
+                    _ => false,
+                }))
+            {
+                Service.Config.IsEnabled = !Service.Config.IsEnabled;
+                Service.Config.Save();
+            }
+
+            var dev = Device.Instance();
+
+            _currentHwnd = (HWND) (IntPtr) dev->hWnd;
+
+            fixed (RECT* currentClientRectPtr = &_currentClientRect)
+            fixed (RECT* currentWindowRectPtr = &_currentWindowRect)
+            {
+                GetClientRect(_currentHwnd, currentClientRectPtr);
+                GetWindowRect(_currentHwnd, currentWindowRectPtr);
+            }
+
+            if (_tickCount++ >= 2)
+            {
+                _tickCount = 0;
+
+                Update();
+            }
+
+            _tickCount++;
         }
-
-        if (_tickCount++ >= 10)
-        {
-            _tickCount = 0;
-
-            Update();
-        }
-
-        _tickCount++;
     }
 }

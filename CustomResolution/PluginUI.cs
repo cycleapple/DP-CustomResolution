@@ -10,6 +10,7 @@ public sealed class PluginUI : IDisposable
 
     internal PluginUI()
     {
+        Service.PluginInterface.UiBuilder.DisableGposeUiHide = true;
         Service.PluginInterface.UiBuilder.Draw += Draw;
         Service.PluginInterface.UiBuilder.OpenConfigUi += ShowConfigWindow;
 

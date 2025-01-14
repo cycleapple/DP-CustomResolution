@@ -1,16 +1,22 @@
-﻿using Dalamud.Interface.Windowing;
+﻿using Dalamud.Game.ClientState.Keys;
+using Dalamud.Interface.Windowing;
 using ImGuiNET;
 using System;
+using System.Linq;
 using System.Numerics;
 
 namespace CustomResolution.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
+    private VirtualKey[] _validKeys = new VirtualKey[] { VirtualKey.NO_KEY }.Union(Service.KeyState.GetValidVirtualKeys()).ToArray();
+
     private int[] _displayCurrentWH = new int[2];
     private int[] _displayCurrentWindowWH = new int[2];
 
     private bool _configIsEnabled;
+    private VirtualKey _configHotkeyKey;
+    private ModifierKey _configHotkeyModifier;
     private bool _configIsScale;
     private float _configScale;
     private int[] _configWH = new int[2];
@@ -32,6 +38,8 @@ public class ConfigWindow : Window, IDisposable
         var config = Service.Config;
 
         _configIsEnabled = config.IsEnabled;
+        _configHotkeyKey = config.HotkeyKey;
+        _configHotkeyModifier = config.HotkeyModifier;
         _configIsScale = config.IsScale;
         _configScale = config.Scale;
         _configWH[0] = (int) config.Width;
@@ -44,6 +52,8 @@ public class ConfigWindow : Window, IDisposable
         var config = Service.Config;
 
         config.IsEnabled = _configIsEnabled;
+        config.HotkeyKey = _configHotkeyKey;
+        config.HotkeyModifier = _configHotkeyModifier;
         config.IsScale = _configIsScale;
         config.Scale = _configScale;
         config.Width = (uint) _configWH[0];
@@ -69,6 +79,53 @@ public class ConfigWindow : Window, IDisposable
         ImGui.EndDisabled();
 
         ImGui.Checkbox("Enabled", ref _configIsEnabled);
+
+        ImGui.SameLine();
+        ImGui.Dummy(new Vector2(20, 0));
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(80);
+        if (ImGui.BeginCombo("##_configHotkeyModifier", _configHotkeyModifier.ToHumanNameString()))
+        {
+            foreach (var key in Enum.GetValues<ModifierKey>())
+            {
+                if (ImGui.Selectable(key.ToHumanNameString(), _configHotkeyModifier == key, ImGuiSelectableFlags.None))
+                {
+                    _configHotkeyModifier = key;
+                }
+
+                if (ImGui.IsItemHovered() && key.ToHumanInfoString() is { } info)
+                {
+                    ImGui.SetTooltip(info);
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        ImGui.SameLine();
+        ImGui.SetNextItemWidth(160);
+        if (ImGui.BeginCombo("##_configHotkeyKey", _configHotkeyKey.ToHumanNameString()))
+        {
+            foreach (var key in _validKeys)
+            {
+                if (ImGui.Selectable(key.ToHumanNameString(), _configHotkeyKey == key, ImGuiSelectableFlags.None))
+                {
+                    _configHotkeyKey = key;
+                }
+
+                if (ImGui.IsItemHovered() && key.ToHumanInfoString() is { } info)
+                {
+                    ImGui.SetTooltip(info);
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+
+        ImGui.SameLine();
+        ImGui.Text("Hotkey");
+
 
         if (!_configIsEnabled)
         {
