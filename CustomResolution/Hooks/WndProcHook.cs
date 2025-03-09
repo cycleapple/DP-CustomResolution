@@ -71,11 +71,34 @@ public sealed unsafe class WndProcHook : IDisposable
         return value;
     }
 
+    private static void ParamToSize(LPARAM param, out uint x, out uint y)
+    {
+        x = (ushort) (param.Value & 0xFFFF);
+        y = (ushort) (param.Value >> 16 & 0xFFFF);
+    }
+
+    private static LPARAM SizeToParam(uint x, uint y)
+    {
+        nint value = 0;
+        value |= ((ushort) x) & 0xFFFF;
+        value |= ((ushort) y) >> 16 & 0xFFFF;
+
+        return value;
+    }
+
     private void Invoke(WndProcEventArgs args)
     {
         if (Service.Plugin is not { } plugin)
         {
             return;
+        }
+
+        if (args.Message == WM.WM_SIZE)
+        {
+            ParamToCoords(args.LParam, out int x, out int y);
+            Service.PluginLog.Debug($"WM_SIZE {x} x {y}");
+            Service.Plugin.Update();
+            args.LParam = SizeToParam(Service.Plugin.CurrentWidth, Service.Plugin.CurrentHeight);
         }
 
         if (WM.WM_MOUSEFIRST <= args.Message && args.Message <= WM.WM_MOUSELAST)

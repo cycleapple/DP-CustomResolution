@@ -73,4 +73,5 @@ public sealed unsafe class CursorPosHooks : IDisposable
 
         return _setCursorPosHook.Original(x, y);
     }
+
 }

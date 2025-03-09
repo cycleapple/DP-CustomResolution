@@ -16,6 +16,7 @@ public sealed class Service
 
     public static WndProcHook WndProcHook { get; internal set; } = null!;
     public static CursorPosHooks CursorPosHooks { get; internal set; } = null!;
+    public static WindowRectHooks WindowRectHooks { get; internal set; } = null!;
 
     [PluginService]
     public static IDalamudPluginInterface PluginInterface { get; private set; } = null!;

@@ -1,8 +1,10 @@
-﻿using Dalamud.Game.ClientState.Keys;
+﻿using CustomResolution.Hooks;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.FFXIV.Client.UI;
 using FFXIVClientStructs.FFXIV.Common.Lua;
 using FFXIVClientStructs.Interop;
@@ -11,6 +13,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using TerraFX.Interop.Windows;
+using static Dalamud.Interface.Utility.Raii.ImRaii;
 using static TerraFX.Interop.Windows.Windows;
 
 namespace CustomResolution;
@@ -23,10 +26,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     private readonly List<Cmd> _cmds;
     private bool _unloading = false;
-    private int _tickCount = 0;
+    private bool _wasEnabled = false;
     private HWND _currentHwnd;
     private RECT _currentClientRect;
-    private RECT _currentWindowRect;
     private DXVKDWMHackMode _currentDXVKDWMHackMode = DXVKDWMHackMode.Off;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
@@ -44,6 +46,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         Service.WndProcHook = new();
         Service.CursorPosHooks = new();
+        Service.WindowRectHooks = new();
 
         _cmds = typeof(Plugin).Assembly.GetTypes()
             .Where(t => !t.IsAbstract && typeof(Cmd).IsAssignableFrom(t))
@@ -77,8 +80,6 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         lock (_disposeLock)
         {
-            _tickCount = 0;
-
             Service.Framework.Update -= OnFrameworkUpdate;
 
             Service.Framework.RunOnFrameworkThread(Update);
@@ -89,6 +90,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             cmd.Dispose();
         }
 
+        Service.WindowRectHooks.Dispose();
         Service.CursorPosHooks.Dispose();
         Service.WndProcHook.Dispose();
 
@@ -99,7 +101,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public void ConvertCoordsWinToGame(ref int x, ref int y)
     {
-        if (CurrentWidth == CurrentWindowWidth &&  CurrentHeight == CurrentWindowHeight)
+        if (CurrentWidth == CurrentWindowWidth && CurrentHeight == CurrentWindowHeight)
         {
             return;
         }
@@ -174,6 +176,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
     public void Update()
     {
         var dev = Device.Instance();
+        var framework = Framework.Instance();
+        var win = framework->GameWindow;
+
+        _currentHwnd = (HWND) (IntPtr) dev->hWnd;
+
+        fixed (RECT* currentClientRectPtr = &_currentClientRect)
+        {
+            Service.WindowRectHooks.GetClientRectOrig(_currentHwnd, currentClientRectPtr);
+        }
 
         int rectWidth = _currentClientRect.right - _currentClientRect.left;
         int rectHeight = _currentClientRect.bottom - _currentClientRect.top;
@@ -185,11 +196,16 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         uint width, height;
 
-        bool disabled = _unloading || !Service.Config.IsEnabled;
-
-        if (Service.Config.IsScale || disabled)
+        bool enabled = !_unloading && Service.Config.IsEnabled;
+        if (_wasEnabled != enabled)
         {
-            var scale = disabled ? 1f : Service.Config.Scale;
+            Service.PluginLog.Info($"Changing state to: {enabled}");
+            _wasEnabled = enabled;
+        }
+
+        if (Service.Config.IsScale || !enabled)
+        {
+            var scale = enabled ? Service.Config.Scale : 1f;
 
             width = (uint) Math.Round(rectWidth * scale);
             height = (uint) Math.Round(rectHeight * scale);
@@ -200,27 +216,33 @@ public sealed unsafe class Plugin : IDalamudPlugin
             height = Service.Config.Height;
         }
 
+        if (width < 256)
+        {
+            width = 256;
+        }
+
+        if (height < 256)
+        {
+            height = 256;
+        }
+
         if (width != dev->Width || height != dev->Height)
         {
-            Service.PluginLog.Info($"Changing resolution to {width} x {height}");
-
-            if (width < 256)
-            {
-                width = 256;
-            }
-
-            if (height < 256)
-            {
-                height = 256;
-            }
-
+            Service.PluginLog.Info($"Changing graphics resolution from {dev->Width} x {dev->Height} to {width} x {height}");
             dev->NewWidth = width;
             dev->NewHeight = height;
             dev->RequestResolutionChange = 1;
+            Service.PluginLog.Info($"Changing game window from {win->WindowWidth} x {win->WindowHeight} to {width} x {height}");
+            win->WindowWidth = (int) width;
+            win->WindowHeight = (int) height;
         }
 
-        // TODO: This isn't accurate! Figure out how to read the game's settings instead.
-        CurrentBorderlessFullscreen = (GetWindowLong(_currentHwnd, GWL.GWL_STYLE) & WS.WS_SYSMENU) == 0;
+        //Service.PluginLog.Debug($"NewWidth 0x{(long) (IntPtr) (&dev->NewWidth):X16}");
+        //Service.PluginLog.Debug($"GameWindow->Width 0x{(long) (IntPtr) (&win->WindowWidth):X16}");
+
+        //Service.PluginLog.Info($"Game window at {win->WindowWidth} x {win->WindowHeight}");
+
+        CurrentBorderlessFullscreen = win->Borderless;
 
         if (Service.Config.DXVKDWMHackMode != DXVKDWMHackMode.Off && !_unloading)
         {
@@ -338,25 +360,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
                 Service.Config.Save();
             }
 
-            var dev = Device.Instance();
-
-            _currentHwnd = (HWND) (IntPtr) dev->hWnd;
-
-            fixed (RECT* currentClientRectPtr = &_currentClientRect)
-            fixed (RECT* currentWindowRectPtr = &_currentWindowRect)
-            {
-                GetClientRect(_currentHwnd, currentClientRectPtr);
-                GetWindowRect(_currentHwnd, currentWindowRectPtr);
-            }
-
-            if (_tickCount++ >= 2)
-            {
-                _tickCount = 0;
-
-                Update();
-            }
-
-            _tickCount++;
+            Update();
         }
     }
 }
