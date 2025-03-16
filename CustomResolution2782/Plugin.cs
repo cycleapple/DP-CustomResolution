@@ -1,19 +1,14 @@
-﻿using CustomResolution.Hooks;
-using Dalamud.Game.ClientState.Keys;
-using Dalamud.IoC;
+﻿using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
-using FFXIVClientStructs.FFXIV.Client.UI;
-using FFXIVClientStructs.FFXIV.Common.Lua;
 using FFXIVClientStructs.Interop;
 using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using TerraFX.Interop.Windows;
-using static Dalamud.Interface.Utility.Raii.ImRaii;
 using static TerraFX.Interop.Windows.Windows;
 
 namespace CustomResolution;

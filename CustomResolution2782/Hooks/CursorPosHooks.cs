@@ -1,12 +1,7 @@
-﻿using CustomResolution.WndProcHookManagerProxyApi;
-using Dalamud.Hooking;
-using Serilog.Events;
+﻿using Dalamud.Hooking;
 using System;
-using System.Linq;
-using System.Reflection.Emit;
 using System.Runtime.InteropServices;
 using TerraFX.Interop.Windows;
-
 
 namespace CustomResolution.Hooks;
 

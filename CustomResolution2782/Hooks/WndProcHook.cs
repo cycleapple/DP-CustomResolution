@@ -1,11 +1,9 @@
 ﻿using CustomResolution.WndProcHookManagerProxyApi;
-using Serilog.Events;
 using System;
 using System.Linq;
 using System.Reflection.Emit;
 using TerraFX.Interop.Windows;
 using static TerraFX.Interop.Windows.Windows;
-
 
 namespace CustomResolution.Hooks;
 

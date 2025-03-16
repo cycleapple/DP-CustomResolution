@@ -1,6 +1,4 @@
-﻿using static FFXIVClientStructs.FFXIV.Client.UI.AddonRelicNoteBook;
-using System.Collections;
-using System.Globalization;
+﻿using System.Globalization;
 using System;
 
 namespace CustomResolution.Cmds;
