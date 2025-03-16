@@ -1,4 +1,5 @@
 ﻿using Dalamud.Game.ClientState.Keys;
+using Dalamud.Game.Config;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
@@ -25,6 +26,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private HWND _currentHwnd;
     private RECT _currentClientRect;
     private DXVKDWMHackMode _currentDXVKDWMHackMode = DXVKDWMHackMode.Off;
+    private bool _ignoreConfigChanges = false;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
@@ -33,6 +35,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         pluginInterface.Create<Service>();
 
         Service.Plugin = this;
+
+        Service.DebugConfig = new DebugConfiguration();
 
         Service.Config = Service.PluginInterface.GetPluginConfig() as Configuration ?? new();
         Service.Config.Initialize(Service.PluginInterface);
@@ -54,6 +58,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         }
 
         Service.Framework.Update += OnFrameworkUpdate;
+        Service.GameConfig.SystemChanged += OnSystemConfigChanged;
     }
 
     public string Name => "CustomResolution";
@@ -67,8 +72,6 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public bool CurrentBorderlessFullscreen { get; private set; }
 
-    public bool IsDebug { get; set; }
-
     public void Dispose()
     {
         _unloading = true;
@@ -76,6 +79,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         lock (_disposeLock)
         {
             Service.Framework.Update -= OnFrameworkUpdate;
+            Service.GameConfig.SystemChanged -= OnSystemConfigChanged;
 
             Service.Framework.RunOnFrameworkThread(Update);
         }
@@ -101,8 +105,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return;
         }
 
-        float scaleX = CurrentWidth / (float) CurrentWindowWidth;
-        float scaleY = CurrentHeight / (float) CurrentWindowHeight;
+        var scaleX = CurrentWidth / (float) CurrentWindowWidth;
+        var scaleY = CurrentHeight / (float) CurrentWindowHeight;
 
         x = (int) Math.Round(x * scaleX);
         y = (int) Math.Round(y * scaleY);
@@ -115,8 +119,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return;
         }
 
-        float scaleX = CurrentWindowWidth / (float) CurrentWidth;
-        float scaleY = CurrentWindowHeight / (float) CurrentHeight;
+        var scaleX = CurrentWindowWidth / (float) CurrentWidth;
+        var scaleY = CurrentWindowHeight / (float) CurrentHeight;
 
         x = (int) Math.Round(x * scaleX);
         y = (int) Math.Round(y * scaleY);
@@ -129,8 +133,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return;
         }
 
-        float scaleX = CurrentWidth / (float) CurrentWindowWidth;
-        float scaleY = CurrentHeight / (float) CurrentWindowHeight;
+        var scaleX = CurrentWidth / (float) CurrentWindowWidth;
+        var scaleY = CurrentHeight / (float) CurrentWindowHeight;
 
         var p = new POINT(x, y);
 
@@ -152,8 +156,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return;
         }
 
-        float scaleX = CurrentWindowWidth / (float) CurrentWidth;
-        float scaleY = CurrentWindowHeight / (float) CurrentHeight;
+        var scaleX = CurrentWindowWidth / (float) CurrentWidth;
+        var scaleY = CurrentWindowHeight / (float) CurrentHeight;
 
         var p = new POINT(x, y);
 
@@ -181,8 +185,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
             Service.WindowRectHooks.GetClientRectOrig(_currentHwnd, currentClientRectPtr);
         }
 
-        int rectWidth = _currentClientRect.right - _currentClientRect.left;
-        int rectHeight = _currentClientRect.bottom - _currentClientRect.top;
+        var rectWidth = _currentClientRect.right - _currentClientRect.left;
+        var rectHeight = _currentClientRect.bottom - _currentClientRect.top;
 
         if ((rectWidth <= 0 || rectHeight <= 0) && !_unloading)
         {
@@ -191,7 +195,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         uint width, height;
 
-        bool enabled = !_unloading && Service.Config.IsEnabled;
+        var enabled = !_unloading && Service.Config.IsEnabled;
         if (_wasEnabled != enabled)
         {
             Service.PluginLog.Info($"Changing state to: {enabled}");
@@ -261,15 +265,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
          * Default windowed style / exstyle is 0x14CF0000 / 0.
          * WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_CAPTION | WS.WS_SYSMENU | WS.WS_THICKFRAME | WS.WS_MINIMIZEBOX | WS.WS_MAXIMIZEBOX
          */
-        uint styleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_STYLE);
-        uint exstyleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE);
+        var styleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_STYLE);
+        var exstyleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE);
 
-        uint style = styleOrig;
-        uint exstyle = exstyleOrig;
+        var style = styleOrig;
+        var exstyle = exstyleOrig;
 
-        bool fullscreen = (style & WS.WS_SYSMENU) == 0;
+        var fullscreen = (style & WS.WS_SYSMENU) == 0;
 
-        if (IsDebug)
+        if (Service.DebugConfig.IsDebug)
         {
             Service.PluginLog.Info("--------");
             Service.PluginLog.Info($"STYLE: 0x{style:X8}");
@@ -307,7 +311,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             exstyle &= ~(uint) WS.WS_EX_COMPOSITED;
         }
 
-        if (IsDebug)
+        if (Service.DebugConfig.IsDebug)
         {
             Service.PluginLog.Info($"NEWSTYLE: 0x{style:X8}");
             Service.PluginLog.Info($"NEWEXSTYLE: 0x{exstyle:X8}");
@@ -315,7 +319,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         if (style != styleOrig || exstyle != exstyleOrig || _currentDXVKDWMHackMode != mode)
         {
-            if (IsDebug)
+            if (Service.DebugConfig.IsDebug)
             {
                 Service.PluginLog.Info("UPDATE");
             }
@@ -326,7 +330,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
             SetWindowPos(_currentHwnd, HWND.NULL, 0, 0, 0, 0, SWP.SWP_NOZORDER | SWP.SWP_NOMOVE | SWP.SWP_NOSIZE | SWP.SWP_NOACTIVATE | SWP.SWP_DRAWFRAME);
             ShowWindow(_currentHwnd, SW.SW_SHOW);
         }
-        else if (IsDebug)
+        else if (Service.DebugConfig.IsDebug)
         {
             Service.PluginLog.Info("SAME");
         }
@@ -356,6 +360,47 @@ public sealed unsafe class Plugin : IDalamudPlugin
             }
 
             Update();
+        }
+    }
+
+    private void OnSystemConfigChanged(object? sender, ConfigChangeEvent raw)
+    {
+        if (_ignoreConfigChanges)
+        {
+            return;
+        }
+
+        if (raw is not ConfigChangeEvent<SystemConfigOption> { } e)
+        {
+            return;
+        }
+
+        switch (e.ConfigOption)
+        {
+            case SystemConfigOption.ScreenWidth:
+            case SystemConfigOption.ScreenHeight:
+                if (Service.DebugConfig.SetSizeMode == SetSizeMode.InterceptSystemConfig)
+                {
+                    var name = e.ConfigOption.ToString();
+                    var valueOrig = Service.GameConfig.System.GetUInt(name);
+
+                    var isW = e.ConfigOption == SystemConfigOption.ScreenWidth;
+                    var scale = (isW ? CurrentWindowWidth : CurrentWindowHeight) / (float) (isW ? CurrentWidth : CurrentHeight);
+                    var valueNew = (uint) Math.Round(valueOrig * scale);
+
+                    Service.PluginLog.Info($"Intercepting config value change for {name}: {valueOrig} -> {valueNew}");
+                    try
+                    {
+                        _ignoreConfigChanges = true;
+                        Service.GameConfig.System.Set(name, valueNew);
+                    }
+                    finally
+                    {
+                        _ignoreConfigChanges = false;
+                    }
+                }
+
+                break;
         }
     }
 }

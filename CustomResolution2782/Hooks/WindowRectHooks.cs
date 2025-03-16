@@ -65,7 +65,10 @@ public sealed unsafe class WindowRectHooks : IDisposable
         Service.PluginLog.Debug($"SetWindowPosDetour A @ {X} {Y} {cx} {cy}");
 #endif
 
-        Service.Plugin.ConvertCoordsGameToWin(ref cx, ref cy);
+        if (Service.DebugConfig.SetSizeMode == SetSizeMode.LegacyHookSetWindowPos)
+        {
+            Service.Plugin.ConvertCoordsGameToWin(ref cx, ref cy);
+        }
 
 #if false
         Service.PluginLog.Debug($"SetWindowPosDetour B @ {X} {Y} {cx} {cy}");

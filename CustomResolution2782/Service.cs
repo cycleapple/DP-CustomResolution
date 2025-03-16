@@ -12,6 +12,8 @@ public sealed class Service
 
     public static Configuration Config { get; internal set; } = null!;
 
+    public static DebugConfiguration DebugConfig { get; internal set; } = null!;
+
     public static PluginUI PluginUI { get; internal set; } = null!;
 
     public static WndProcHook WndProcHook { get; internal set; } = null!;
@@ -41,6 +43,9 @@ public sealed class Service
 
     [PluginService]
     public static IKeyState KeyState { get; private set; } = null!;
+
+    [PluginService]
+    public static IGameConfig GameConfig { get; private set; } = null!;
 
     public static void PrintChat(string msg)
     {

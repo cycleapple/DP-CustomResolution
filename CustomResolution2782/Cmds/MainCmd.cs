@@ -64,18 +64,28 @@ public sealed class MainCmd : Cmd
                 return;
 
             case "debugon":
-                Service.Plugin.IsDebug = true;
+                Service.DebugConfig.IsDebug = true;
                 Service.PrintChat("Enabled cres debug.");
                 return;
 
             case "debugoff":
-                Service.Plugin.IsDebug = false;
+                Service.DebugConfig.IsDebug = false;
                 Service.PrintChat("Disabled cres debug.");
                 return;
 
             case "debug":
-                Service.Plugin.IsDebug = !Service.Plugin.IsDebug;
-                Service.PrintChat($"{(Service.Plugin.IsDebug ? "Enabled" : "Disabled")} cres debug.");
+                Service.DebugConfig.IsDebug = !Service.DebugConfig.IsDebug;
+                Service.PrintChat($"{(Service.DebugConfig.IsDebug ? "Enabled" : "Disabled")} cres debug.");
+                return;
+
+            case "debugsizeold":
+                Service.DebugConfig.SetSizeMode = SetSizeMode.LegacyHookSetWindowPos;
+                Service.PrintChat("Switched to legacy size mode. Please report your use case / any bugs with the new mode to 0x0ade.");
+                return;
+
+            case "debugsizenew":
+                Service.DebugConfig.SetSizeMode = SetSizeMode.InterceptSystemConfig;
+                Service.PrintChat("Switched back to new size mode.");
                 return;
         }
 
