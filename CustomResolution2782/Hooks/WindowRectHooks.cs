@@ -34,6 +34,7 @@ public sealed unsafe class WindowRectHooks : IDisposable
     public void Dispose()
     {
         _getClientRectHook.Dispose();
+        _setWindowPosHook.Dispose();
     }
 
     public bool GetClientRectOrig(HWND hWnd, RECT* lpRect)
