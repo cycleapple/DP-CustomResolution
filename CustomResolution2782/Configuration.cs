@@ -23,6 +23,8 @@ public class Configuration : IPluginConfiguration
 
     public DXVKDWMHackMode DXVKDWMHackMode = DXVKDWMHackMode.Off;
 
+    public MinSizeMode MinSizeMode = MinSizeMode.Unchanged;
+
     [NonSerialized]
     private IDalamudPluginInterface? pluginInterface;
 
@@ -120,6 +122,29 @@ public static class ModifierKeyExt
 
     public static string? ToHumanInfoString(this ModifierKey mode) => mode switch
     {
+        _ => null
+    };
+}
+
+public enum MinSizeMode
+{
+    Unchanged = 0,
+    Unlocked = 1
+}
+
+public static class MinSizeModeExt
+{
+    public static string ToHumanNameString(this MinSizeMode mode) => mode switch
+    {
+        MinSizeMode.Unchanged => "Unchanged (1024x768)",
+        MinSizeMode.Unlocked => "Unlocked",
+        _ => mode.ToString(),
+    };
+
+    public static string? ToHumanInfoString(this MinSizeMode mode) => mode switch
+    {
+        MinSizeMode.Unchanged => "The game normally doesn't allow resizing to smaller than 1024x768.",
+        MinSizeMode.Unlocked => "Allow resizing the game in windowed mode to smaller than 1024x768. Works best with scaling over 100%.",
         _ => null
     };
 }

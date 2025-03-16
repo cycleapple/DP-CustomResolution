@@ -1,5 +1,6 @@
 ﻿using CustomResolution.WndProcHookManagerProxyApi;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Reflection.Emit;
 using TerraFX.Interop.Windows;
@@ -15,8 +16,10 @@ public sealed unsafe class WndProcHook : IDisposable
     private readonly WndProcHookManager _manager;
 
     private bool _applied = false;
-    private DynamicMethod? _genMethod;
-    private Delegate? _genDelegate;
+    private DynamicMethod? _genMethodPre;
+    private Delegate? _genDelegatePre;
+    private DynamicMethod? _genMethodPost;
+    private Delegate? _genDelegatePost;
 
     public WndProcHook()
     {
@@ -34,23 +37,40 @@ public sealed unsafe class WndProcHook : IDisposable
             return;
         }
 
-        if (_manager.PreWndProc is not { } preWndProcProp)
+        if (_manager.PreWndProc is { } preWndProcProp)
+        {
+            preWndProcProp.RemoveEventHandler(_manager.ProxiedValue, _genDelegatePre);
+        }
+        else
         {
             Service.PluginLog.Information("CustomResolution couldn't obtain the PreWndProc event.");
-
-            return;
         }
 
-        preWndProcProp.RemoveEventHandler(_manager.ProxiedValue, _genDelegate);
+        if (_manager.PostWndProc is { } postWndProcProp)
+        {
+            postWndProcProp.RemoveEventHandler(_manager.ProxiedValue, _genDelegatePost);
+        }
+        else
+        {
+            Service.PluginLog.Information("CustomResolution couldn't obtain the PostWndProc event.");
+        }
 
         _applied = false;
     }
 
-    public static void InvokeStatic(object args)
+    public static void InvokeStaticPre(object args)
     {
         if (_instance is { } instance)
         {
-            instance.Invoke(new WndProcEventArgs(instance._manager, args));
+            instance.InvokePre(new WndProcEventArgs(instance._manager, args));
+        }
+    }
+
+    public static void InvokeStaticPost(object args)
+    {
+        if (_instance is { } instance)
+        {
+            instance.InvokePost(new WndProcEventArgs(instance._manager, args));
         }
     }
 
@@ -84,11 +104,17 @@ public sealed unsafe class WndProcHook : IDisposable
         return value;
     }
 
-    private void Invoke(WndProcEventArgs args)
+    private void InvokePre(WndProcEventArgs args)
     {
         if (Service.Plugin is not { } plugin)
         {
             return;
+        }
+
+        if (args.Message == WM.WM_WINDOWPOSCHANGING &&
+            Service.Config.MinSizeMode == MinSizeMode.Unlocked)
+        {
+            args.SuppressCall = true;
         }
 
         if (args.Message == WM.WM_SIZE)
@@ -151,6 +177,14 @@ public sealed unsafe class WndProcHook : IDisposable
         }
     }
 
+    private void InvokePost(WndProcEventArgs args)
+    {
+        if (Service.Plugin is not { } plugin)
+        {
+            return;
+        }
+    }
+
     private void Apply()
     {
         if (!_manager.Refresh())
@@ -163,34 +197,56 @@ public sealed unsafe class WndProcHook : IDisposable
             Dispose();
         }
 
-        if (_manager.PreWndProc is not { } preWndProcProp)
+        if (_manager.PreWndProc is not { } preWndProcProp ||
+            _manager.PostWndProc is not { } postWndProcProp)
         {
-            Service.PluginLog.Information("CustomResolution couldn't obtain the PreWndProc event.");
+            Service.PluginLog.Information("CustomResolution couldn't obtain the PreWndProc / PostWndProc events.");
 
             return;
         }
 
-        if (_genDelegate is null)
+        if (_genDelegatePre is null)
         {
             var delegateType = preWndProcProp.EventHandlerType!;
             var delegateInvoke = delegateType.GetMethod("Invoke")!;
 
-            _genMethod = new DynamicMethod(
+            _genMethodPre = new DynamicMethod(
                 "CustomResolution_PreWndProc",
                 delegateInvoke.ReturnType,
                 delegateInvoke.GetParameters().Select(p => p.ParameterType).ToArray()
             );
 
-            var il = _genMethod.GetILGenerator();
+            var il = _genMethodPre.GetILGenerator();
 
             il.Emit(OpCodes.Ldarg_0);
-            il.Emit(OpCodes.Call, typeof(WndProcHook).GetMethod("InvokeStatic")!);
+            il.Emit(OpCodes.Call, typeof(WndProcHook).GetMethod(nameof(InvokeStaticPre))!);
             il.Emit(OpCodes.Ret);
 
-            _genDelegate = _genMethod.CreateDelegate(delegateType);
+            _genDelegatePre = _genMethodPre.CreateDelegate(delegateType);
         }
 
-        preWndProcProp.AddEventHandler(_manager.ProxiedValue, _genDelegate);
+        if (_genDelegatePost is null)
+        {
+            var delegateType = preWndProcProp.EventHandlerType!;
+            var delegateInvoke = delegateType.GetMethod("Invoke")!;
+
+            _genMethodPost = new DynamicMethod(
+                "CustomResolution_PostWndProc",
+                delegateInvoke.ReturnType,
+                delegateInvoke.GetParameters().Select(p => p.ParameterType).ToArray()
+            );
+
+            var il = _genMethodPost.GetILGenerator();
+
+            il.Emit(OpCodes.Ldarg_0);
+            il.Emit(OpCodes.Call, typeof(WndProcHook).GetMethod(nameof(InvokeStaticPost))!);
+            il.Emit(OpCodes.Ret);
+
+            _genDelegatePost = _genMethodPost.CreateDelegate(delegateType);
+        }
+
+        preWndProcProp.AddEventHandler(_manager.ProxiedValue, _genDelegatePre);
+        postWndProcProp.AddEventHandler(_manager.ProxiedValue, _genDelegatePost);
 
         _applied = true;
     }

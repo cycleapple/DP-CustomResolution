@@ -32,4 +32,10 @@ public readonly record struct WndProcEventArgs(WndProcHookManager WndProcHookMan
         get => (bool) WndProcHookManager.GetValue(ProxiedValue, nameof(SuppressCall))!;
         set => WndProcHookManager.SetValue(ProxiedValue, nameof(SuppressCall), value);
     }
+
+    public LRESULT ReturnValue
+    {
+        get => (LRESULT) WndProcHookManager.GetValue(ProxiedValue, nameof(ReturnValue))!;
+        set => WndProcHookManager.SetValue(ProxiedValue, nameof(ReturnValue), value);
+    }
 }

@@ -21,6 +21,7 @@ public class ConfigWindow : Window, IDisposable
     private float _configScale;
     private int[] _configWH = new int[2];
     private DXVKDWMHackMode _configDXVKDWMHackMode;
+    private MinSizeMode _configMinSizeMode;
 
     public ConfigWindow() : base(
         "CustomResolution",
@@ -45,6 +46,7 @@ public class ConfigWindow : Window, IDisposable
         _configWH[0] = (int) config.Width;
         _configWH[1] = (int) config.Height;
         _configDXVKDWMHackMode = config.DXVKDWMHackMode;
+        _configMinSizeMode = config.MinSizeMode;
     }
 
     public void UpdateToConfig()
@@ -59,6 +61,7 @@ public class ConfigWindow : Window, IDisposable
         config.Width = (uint) _configWH[0];
         config.Height = (uint) _configWH[1];
         config.DXVKDWMHackMode = _configDXVKDWMHackMode;
+        config.MinSizeMode = _configMinSizeMode;
 
         config.Save();
     }
@@ -180,6 +183,24 @@ Make sure to switch the game to windowed and then back to borderless windowed wh
 Works even with the scaling above disabled.
 
 Not intended to be used with proper fullscreen.");
+        }
+
+        if (ImGui.BeginCombo("Minimum window size", _configMinSizeMode.ToHumanNameString()))
+        {
+            foreach (var mode in Enum.GetValues<MinSizeMode>())
+            {
+                if (ImGui.Selectable(mode.ToHumanNameString(), _configMinSizeMode == mode, ImGuiSelectableFlags.None))
+                {
+                    _configMinSizeMode = mode;
+                }
+
+                if (ImGui.IsItemHovered() && mode.ToHumanInfoString() is { } info)
+                {
+                    ImGui.SetTooltip(info);
+                }
+            }
+
+            ImGui.EndCombo();
         }
 
         if (ImGui.Button("Save and apply"))

@@ -28,6 +28,7 @@ public class WndProcHookManager
     public object? ProxiedValue => _realManager;
 
     public EventInfo? PreWndProc { get; private set; }
+    public EventInfo? PostWndProc { get; private set; }
 
     public bool Refresh()
     {
@@ -95,6 +96,7 @@ public class WndProcHookManager
         }
 
         PreWndProc = _realManagerType.GetEvent("PreWndProc");
+        PostWndProc = _realManagerType.GetEvent("PostWndProc");
 
         return true;
     }
@@ -276,6 +278,7 @@ public class WndProcHookManager
         _realManagerType = default;
 
         PreWndProc = default;
+        PostWndProc = default;
 
         ClearCache();
     }
