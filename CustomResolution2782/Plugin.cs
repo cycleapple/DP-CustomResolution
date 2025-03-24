@@ -9,6 +9,7 @@ using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Xml.Linq;
 using TerraFX.Interop.Windows;
 using static TerraFX.Interop.Windows.Windows;
 
@@ -240,6 +241,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
         //Service.PluginLog.Debug($"GameWindow->Width 0x{(long) (IntPtr) (&win->WindowWidth):X16}");
 
         //Service.PluginLog.Info($"Game window at {win->WindowWidth} x {win->WindowHeight}");
+
+        //Service.PluginLog.Info($"AAA {Service.GameConfig.System.GetUInt(nameof(SystemConfigOption.UiHighScale))}");
 
         CurrentBorderlessFullscreen = win->Borderless;
 

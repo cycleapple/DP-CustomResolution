@@ -1,5 +1,5 @@
 @set src=.\CustomResolution2782\bin\x64\Release\CustomResolution2782
-@set dst=O:\home\ade\wwwext\xiv\CustomResolution
+@set dst=O:\home\ade\wwwext\xiv\CustomResolution2782
 
 dotnet build -c Release
 
