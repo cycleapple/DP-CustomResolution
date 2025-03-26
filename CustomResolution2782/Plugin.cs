@@ -25,6 +25,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private bool _unloading = false;
     private bool _wasEnabled = false;
     private HWND _currentHwnd;
+    private bool _currentHwndMismatch = false;
     private RECT _currentClientRect;
     private DXVKDWMHackMode _currentDXVKDWMHackMode = DXVKDWMHackMode.Off;
     private bool _ignoreConfigChanges = false;
@@ -179,7 +180,35 @@ public sealed unsafe class Plugin : IDalamudPlugin
         var framework = Framework.Instance();
         var win = framework->GameWindow;
 
-        _currentHwnd = (HWND) (IntPtr) dev->hWnd;
+        _currentHwnd = (HWND) win->WindowHandle;
+
+#if CRES_CLEAN
+        var _dev_hWnd = (IntPtr*) &dev->hWnd;
+        var _dev_NewWidth = &dev->NewWidth;
+        var _dev_NewHeight = &dev->NewHeight;
+        var _dev_RequestResolutionChange = &dev->RequestResolutionChange;
+#else
+        // 7.2
+        var _dev_hWnd = (nint*) ((nint) dev + 0x1B8);
+        var _dev_NewWidth = (uint*) ((nint) dev + 0x1B8 + 0x10);
+        var _dev_NewHeight = (uint*) ((nint) dev + 0x1B8 + 0x14);
+        var _dev_RequestResolutionChange = &dev->RequestResolutionChange;
+#endif
+
+        // As a safety measure, don't mess with the structs if we're reading garbage.
+        // This isn't perfect, but it's better than nothing.
+        if (_currentHwnd != *_dev_hWnd)
+        {
+            if (!_currentHwndMismatch)
+            {
+                _currentHwndMismatch = true;
+                Service.PluginLog.Info($"HWND MISMATCH between GameWindow and Device: {(long) (IntPtr) (_currentHwnd):X16} vs {(long) *_dev_hWnd:X16}");
+            }
+
+            return;
+        }
+
+        _currentHwndMismatch = false;
 
         fixed (RECT* currentClientRectPtr = &_currentClientRect)
         {
@@ -229,9 +258,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (width != dev->Width || height != dev->Height)
         {
             Service.PluginLog.Info($"Changing graphics resolution from {dev->Width} x {dev->Height} to {width} x {height}");
-            dev->NewWidth = width;
-            dev->NewHeight = height;
-            dev->RequestResolutionChange = 1;
+            *_dev_NewWidth = width;
+            *_dev_NewHeight = height;
+            *_dev_RequestResolutionChange = 1;
             Service.PluginLog.Info($"Changing game window from {win->WindowWidth} x {win->WindowHeight} to {width} x {height}");
             win->WindowWidth = (int) width;
             win->WindowHeight = (int) height;
