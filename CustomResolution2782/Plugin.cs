@@ -9,7 +9,7 @@ using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
-using System.Xml.Linq;
+using System.Runtime.InteropServices;
 using TerraFX.Interop.Windows;
 using static TerraFX.Interop.Windows.Windows;
 
@@ -188,10 +188,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
         var _dev_NewHeight = &dev->NewHeight;
         var _dev_RequestResolutionChange = &dev->RequestResolutionChange;
 #else
-        // 7.2
-        var _dev_hWnd = (nint*) ((nint) dev + 0x1B8);
-        var _dev_NewWidth = (uint*) ((nint) dev + 0x1B8 + 0x10);
-        var _dev_NewHeight = (uint*) ((nint) dev + 0x1B8 + 0x14);
+        // 7.2 adds 1B8 before hWnd (previously 820, now 9D8)
+        var _dev_hWnd = (nint*) ((IntPtr) dev + 0x9D8);
+        var _dev_NewWidth = (uint*) ((IntPtr) dev + 0x9D8 + 0x10);
+        var _dev_NewHeight = (uint*) ((IntPtr) dev + 0x9D8 + 0x14);
         var _dev_RequestResolutionChange = &dev->RequestResolutionChange;
 #endif
 
@@ -202,7 +202,10 @@ public sealed unsafe class Plugin : IDalamudPlugin
             if (!_currentHwndMismatch)
             {
                 _currentHwndMismatch = true;
-                Service.PluginLog.Info($"HWND MISMATCH between GameWindow and Device: {(long) (IntPtr) (_currentHwnd):X16} vs {(long) *_dev_hWnd:X16}");
+                Service.PluginLog.Error($"HWND MISMATCH between GameWindow and Device: 0x{(long) (IntPtr) (_currentHwnd):X16} vs 0x{(long) *_dev_hWnd:X16}");
+                Service.PluginLog.Info($"dev is at: 0x{(long) (IntPtr) dev:X16}");
+                CheckHWND("GameWindow", _currentHwnd);
+                CheckHWND("Device", (HWND) (*_dev_hWnd));
             }
 
             return;
@@ -368,6 +371,15 @@ public sealed unsafe class Plugin : IDalamudPlugin
         }
 
         _currentDXVKDWMHackMode = mode;
+    }
+
+    private void CheckHWND(string from, HWND hwnd)
+    {
+        RECT rect = default;
+        if (!GetClientRect(hwnd, &rect))
+        {
+            Service.PluginLog.Info($"{from} is sus: {Marshal.GetLastPInvokeErrorMessage()}");
+        }
     }
 
     private void OnFrameworkUpdate(IFramework framework)
