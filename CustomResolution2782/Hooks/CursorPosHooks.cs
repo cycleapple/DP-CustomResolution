@@ -10,6 +10,8 @@ public sealed unsafe class CursorPosHooks : IDisposable
 {
     private readonly Hook<GetCursorPosDelegate> _getCursorPosHook;
     private readonly Hook<SetCursorPosDelegate> _setCursorPosHook;
+    private readonly Hook<ScreenToClientDelegate> _screenToClientHook;
+    private readonly Hook<ClientToScreenDelegate> _clientToScreenHook;
 
     public CursorPosHooks()
     {
@@ -18,6 +20,12 @@ public sealed unsafe class CursorPosHooks : IDisposable
 
         _setCursorPosHook = Service.GameInteropProvider.HookFromSymbol<SetCursorPosDelegate>("user32.dll", "SetCursorPos", SetCursorPosDetour);
         _setCursorPosHook.Enable();
+
+        _screenToClientHook = Service.GameInteropProvider.HookFromSymbol<ScreenToClientDelegate>("user32.dll", "ScreenToClient", ScreenToClientDetour);
+        _screenToClientHook.Enable();
+
+        _clientToScreenHook = Service.GameInteropProvider.HookFromSymbol<ClientToScreenDelegate>("user32.dll", "ClientToScreen", ClientToScreenDetour);
+        _clientToScreenHook.Enable();
     }
 
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
@@ -26,19 +34,46 @@ public sealed unsafe class CursorPosHooks : IDisposable
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private unsafe delegate bool SetCursorPosDelegate(int x, int y);
 
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private unsafe delegate bool ScreenToClientDelegate(HWND hWnd, POINT* lpPoint);
+
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private unsafe delegate bool ClientToScreenDelegate(HWND hWnd, POINT* lpPoint);
+
     public void Dispose()
     {
         _getCursorPosHook.Dispose();
         _setCursorPosHook.Dispose();
+        _screenToClientHook.Dispose();
+        _clientToScreenHook.Dispose();
+    }
+
+    public bool GetCursorPosOrig(POINT* lpPoint)
+    {
+        return _getCursorPosHook.Original(lpPoint);
+    }
+
+    public bool SetCursorPosOrig(int x, int y)
+    {
+        return _setCursorPosHook.Original(x, y);
+    }
+
+    public bool ScreenToClientOrig(HWND hWnd, POINT* lpPoint)
+    {
+        return _screenToClientHook.Original(hWnd, lpPoint);
+    }
+
+    public bool ClientToScreenOrig(HWND hWnd, POINT* lpPoint)
+    {
+        return _clientToScreenHook.Original(hWnd, lpPoint);
     }
 
     private bool GetCursorPosDetour(POINT* lpPoint)
     {
         var rv = _getCursorPosHook.Original(lpPoint);
-
-        if (!rv)
+        if (!rv || lpPoint == null)
         {
-            return false;
+            return rv;
         }
 
 #if false
@@ -69,4 +104,13 @@ public sealed unsafe class CursorPosHooks : IDisposable
         return _setCursorPosHook.Original(x, y);
     }
 
+    private bool ScreenToClientDetour(HWND hWnd, POINT* lpPoint)
+    {
+        return _screenToClientHook.Original(hWnd, lpPoint);
+    }
+
+    private bool ClientToScreenDetour(HWND hWnd, POINT* lpPoint)
+    {
+        return _clientToScreenHook.Original(hWnd, lpPoint);
+    }
 }

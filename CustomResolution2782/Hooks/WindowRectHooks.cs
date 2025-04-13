@@ -50,7 +50,10 @@ public sealed unsafe class WindowRectHooks : IDisposable
         Service.PluginLog.Debug($"GetClientRectDetour A @ {lpRect->left} {lpRect->top} {lpRect->right} {lpRect->bottom}");
 #endif
 
-        Service.Plugin.ConvertCoordsWinToGame(ref lpRect->right, ref lpRect->bottom);
+        if (hWnd == Service.Plugin.CurrentHWND)
+        {
+            Service.Plugin.ConvertCoordsWinToGame(ref lpRect->right, ref lpRect->bottom);
+        }
 
 #if false
         Service.PluginLog.Debug($"GetClientRectDetour B @ {lpRect->left} {lpRect->top} {lpRect->right} {lpRect->bottom}");
@@ -65,7 +68,7 @@ public sealed unsafe class WindowRectHooks : IDisposable
         Service.PluginLog.Debug($"SetWindowPosDetour A @ {X} {Y} {cx} {cy}");
 #endif
 
-        if (Service.DebugConfig.SetSizeMode == SetSizeMode.LegacyHookSetWindowPos)
+        if (Service.DebugConfig.SetSizeMode == SetSizeMode.LegacyHookSetWindowPos && hWnd == Service.Plugin.CurrentHWND)
         {
             Service.Plugin.ConvertCoordsGameToWin(ref cx, ref cy);
         }

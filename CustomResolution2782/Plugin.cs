@@ -65,7 +65,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public string Name => "CustomResolution";
 
-    public HWND CurrentHWND { get; private set; }
+    public HWND CurrentHWND => _currentHwnd;
 
     public uint CurrentWidth { get; private set; }
     public uint CurrentHeight { get; private set; }
@@ -140,12 +140,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         var p = new POINT(x, y);
 
-        ScreenToClient(_currentHwnd, &p);
+        Service.CursorPosHooks.ScreenToClientOrig(_currentHwnd, &p);
 
         p.x = (int) Math.Round(p.x * scaleX);
         p.y = (int) Math.Round(p.y * scaleY);
 
-        ClientToScreen(_currentHwnd, &p);
+        Service.CursorPosHooks.ClientToScreenOrig(_currentHwnd, &p);
 
         x = p.x;
         y = p.y;
@@ -163,12 +163,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         var p = new POINT(x, y);
 
-        ScreenToClient(_currentHwnd, &p);
+        Service.CursorPosHooks.ScreenToClientOrig(_currentHwnd, &p);
 
         p.x = (int) Math.Round(p.x * scaleX);
         p.y = (int) Math.Round(p.y * scaleY);
 
-        ClientToScreen(_currentHwnd, &p);
+        Service.CursorPosHooks.ClientToScreenOrig(_currentHwnd, &p);
 
         x = p.x;
         y = p.y;
