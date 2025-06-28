@@ -31,3 +31,8 @@ Windows should perform basic filtering with 2x scaling (it might not work on som
 heard back from anyone using this on Linux yet. But an universal fix for this is possible - it just requires more
 time than I have on my hands right now.
 </details>
+
+<details><summary>I'm using DLSS, and my game looks pixelated / is small!</summary>
+DLSS and cres at very small scales (width / height under about 500 pixels) seems to be a conflicting combo.
+Resizing the game window usually undoes any miniaturization, but I've yet to figure out why the game pixelates. Sorry!
+</details>
