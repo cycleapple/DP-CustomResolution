@@ -74,32 +74,32 @@ public sealed unsafe class WndProcHook : IDisposable
         }
     }
 
-    private static void ParamToCoords(LPARAM param, out int x, out int y)
+    public static void ParamToCoords(LPARAM param, out int x, out int y)
     {
         x = (short) (ushort) (param.Value & 0xFFFF);
-        y = (short) (ushort) (param.Value >> 16 & 0xFFFF);
+        y = (short) (ushort) ((param.Value >> 16) & 0xFFFF);
     }
 
-    private static LPARAM CoordsToParam(int x, int y)
+    public static LPARAM CoordsToParam(int x, int y)
     {
         nint value = 0;
         value |= ((ushort) (short) x) & 0xFFFF;
-        value |= ((ushort) (short) y) >> 16 & 0xFFFF;
+        value |= (((ushort) (short) y) & 0xFFFF) << 16;
 
         return value;
     }
 
-    private static void ParamToSize(LPARAM param, out uint x, out uint y)
+    public static void ParamToSize(LPARAM param, out uint x, out uint y)
     {
         x = (ushort) (param.Value & 0xFFFF);
-        y = (ushort) (param.Value >> 16 & 0xFFFF);
+        y = (ushort) ((param.Value >> 16) & 0xFFFF);
     }
 
-    private static LPARAM SizeToParam(uint x, uint y)
+    public static LPARAM SizeToParam(uint x, uint y)
     {
         nint value = 0;
         value |= ((ushort) x) & 0xFFFF;
-        value |= ((ushort) y) >> 16 & 0xFFFF;
+        value |= (((ushort) y) & 0xFFFF) << 16;
 
         return value;
     }

@@ -79,12 +79,12 @@ public sealed class MainCmd : Cmd
                 return;
 
             case "debugsizeold":
-                Service.DebugConfig.SetSizeMode = SetSizeMode.LegacyHookSetWindowPos;
+                Service.DebugConfig.ForceSizeMode = ForceSizeMode.LegacyRequestResolutionChange;
                 Service.PrintChat("Switched to legacy size mode. Please report your use case / any bugs with the new mode to 0x0ade.");
                 return;
 
             case "debugsizenew":
-                Service.DebugConfig.SetSizeMode = SetSizeMode.InterceptSystemConfig;
+                Service.DebugConfig.ForceSizeMode = ForceSizeMode.FakeWindowResize;
                 Service.PrintChat("Switched back to new size mode.");
                 return;
         }

@@ -33,6 +33,8 @@ time than I have on my hands right now.
 </details>
 
 <details><summary>I'm using DLSS, and my game looks pixelated / is small!</summary>
-DLSS and cres at very small scales (width / height under about 500 pixels) seems to be a conflicting combo.
-Resizing the game window usually undoes any miniaturization, but I've yet to figure out why the game pixelates. Sorry!
+DLSS in FFXIV is bugged. No, I'm not joking: even without any plugins or mods loaded, it can glitch out when
+simply resizing the window (most notably by rapidly pressing WinKey + Down and WinKey + Up).
+
+This issue doesn't happen with FSR and non-DLSS dynamic resolution.
 </details>

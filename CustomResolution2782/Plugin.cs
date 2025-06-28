@@ -1,4 +1,5 @@
-﻿using Dalamud.Game.ClientState.Keys;
+﻿using CustomResolution.Hooks;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Config;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
@@ -29,6 +30,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
     private RECT _currentClientRect;
     private DXVKDWMHackMode _currentDXVKDWMHackMode = DXVKDWMHackMode.Off;
     private bool _ignoreConfigChanges = false;
+    private bool _currentlyFakeResize = false;
+    private bool _requestedResolutionChange = false;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
@@ -226,14 +229,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
             return;
         }
 
-        uint width, height;
-
         var enabled = !_unloading && Service.Config.IsEnabled;
-        if (_wasEnabled != enabled)
-        {
-            Service.PluginLog.Info($"Changing state to: {enabled}");
-            _wasEnabled = enabled;
-        }
+
+        uint width, height;
 
         if (Service.Config.IsScale || !enabled)
         {
@@ -258,15 +256,61 @@ public sealed unsafe class Plugin : IDalamudPlugin
             height = 256;
         }
 
-        if (width != dev->Width || height != dev->Height)
+        _requestedResolutionChange |= (*_dev_RequestResolutionChange) != 0;
+
+        if (!_currentlyFakeResize && (_unloading || enabled || _wasEnabled || _requestedResolutionChange) &&
+            (width != dev->Width || height != dev->Height))
         {
             Service.PluginLog.Info($"Changing graphics resolution from {dev->Width} x {dev->Height} to {width} x {height}");
-            *_dev_NewWidth = width;
-            *_dev_NewHeight = height;
-            *_dev_RequestResolutionChange = 1;
-            Service.PluginLog.Info($"Changing game window from {win->WindowWidth} x {win->WindowHeight} to {width} x {height}");
-            win->WindowWidth = (int) width;
-            win->WindowHeight = (int) height;
+            var mode = Service.DebugConfig.ForceSizeMode;
+            if (_requestedResolutionChange)
+            {
+                // Let's try to be cautious about other plugins (f.e. SimpleTweaks) changing the game resolution.
+                Service.PluginLog.Info($"Game resolution was changed externally - forcing resize via device, not window resize.");
+                mode = ForceSizeMode.LegacyRequestResolutionChange;
+                _requestedResolutionChange = false;
+            }
+            switch (mode)
+            {
+                case ForceSizeMode.Skip:
+                    break;
+                case ForceSizeMode.LegacyRequestResolutionChange:
+                    *_dev_NewWidth = width;
+                    *_dev_NewHeight = height;
+                    *_dev_RequestResolutionChange = 1;
+                    Service.PluginLog.Info($"Changing game window from {win->WindowWidth} x {win->WindowHeight} to {width} x {height}");
+                    win->WindowWidth = (int) width;
+                    win->WindowHeight = (int) height;
+                    break;
+                case ForceSizeMode.FakeWindowResize:
+                    var adjustedClientRect = new RECT(0, 0, rectWidth, rectHeight);
+                    AdjustWindowRect(&adjustedClientRect, (uint) GetWindowLongPtr(_currentHwnd, GWL.GWL_STYLE), false);
+                    var adjustedWidth = adjustedClientRect.right - adjustedClientRect.left;
+                    var adjustedHeight = adjustedClientRect.bottom - adjustedClientRect.top;
+                    Service.PluginLog.Info($"Resizing window to {adjustedWidth} x {adjustedHeight}");
+                    try
+                    {
+                        _currentlyFakeResize = true;
+                        SendMessage(_currentHwnd, WM.WM_ENTERSIZEMOVE, 0, 0);
+                        SendMessage(_currentHwnd, WM.WM_SIZE, SIZE_MAXSHOW, WndProcHook.SizeToParam((uint) adjustedWidth, (uint) adjustedHeight));
+                        SendMessage(_currentHwnd, WM.WM_PAINT, 0, 0);
+                        SendMessage(_currentHwnd, WM.WM_EXITSIZEMOVE, 0, 0);
+                    }
+                    finally
+                    {
+                        _currentlyFakeResize = false;
+                    }
+                    break;
+                default:
+                    Service.PluginLog.Error($"Unknown ForceSizeMode: {Service.DebugConfig.ForceSizeMode}");
+                    break;
+            }
+        }
+
+        if (_wasEnabled != enabled)
+        {
+            Service.PluginLog.Info($"Changed state to: {enabled}");
+            _wasEnabled = enabled;
         }
 
         //Service.PluginLog.Debug($"NewWidth 0x{(long) (IntPtr) (&dev->NewWidth):X16}");
@@ -423,7 +467,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         {
             case SystemConfigOption.ScreenWidth:
             case SystemConfigOption.ScreenHeight:
-                if (Service.DebugConfig.SetSizeMode == SetSizeMode.InterceptSystemConfig)
+                if (Service.DebugConfig.SetWindowSizeMode == SetWindowSizeMode.InterceptSystemConfig)
                 {
                     var name = e.ConfigOption.ToString();
                     var valueOrig = Service.GameConfig.System.GetUInt(name);
@@ -447,4 +491,23 @@ public sealed unsafe class Plugin : IDalamudPlugin
                 break;
         }
     }
+}
+
+public enum ForceSizeMode
+{
+    Skip = -1,
+
+    /// <summary>
+    /// Fake a window resize event.
+    /// </summary>
+    FakeWindowResize = 0,
+
+    /// <summary>
+    /// Legacy mode, went through more initial testing, works well except for conflicts with other plugins.
+    /// Might revert or remove depending on how FakeWindowResize testing / fixups proceed.
+    ///
+    /// Update the graphics device width / height and set RequestResolutionChange.
+    /// This is the same method that other plugins such as SimpleTweaks or XIVWindowResizer use.
+    /// </summary>
+    LegacyRequestResolutionChange = 1
 }

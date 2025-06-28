@@ -62,13 +62,18 @@ public sealed unsafe class WindowRectHooks : IDisposable
         return rv;
     }
 
+    public bool SetWindowPosOrig(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags)
+    {
+        return _setWindowPosHook.Original(hWnd, hWndInsertAfter, X, Y, cx, cy, uFlags);
+    }
+
     private bool SetWindowPosDetour(HWND hWnd, HWND hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags)
     {
 #if false
         Service.PluginLog.Debug($"SetWindowPosDetour A @ {X} {Y} {cx} {cy}");
 #endif
 
-        if (Service.DebugConfig.SetSizeMode == SetSizeMode.LegacyHookSetWindowPos && hWnd == Service.Plugin.CurrentHWND)
+        if (Service.DebugConfig.SetWindowSizeMode == SetWindowSizeMode.LegacyHookSetWindowPos && hWnd == Service.Plugin.CurrentHWND)
         {
             Service.Plugin.ConvertCoordsGameToWin(ref cx, ref cy);
         }
