@@ -130,28 +130,15 @@ public class ConfigWindow : Window, IDisposable
         ImGui.Text("Hotkey");
 
 
-        if (!_configIsEnabled)
-        {
-            ImGui.BeginDisabled();
-        }
-
         ImGui.Checkbox("Use scale", ref _configIsScale);
 
         if (_configIsScale)
         {
-            if (ImGui.InputFloat("Scale", ref _configScale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.EnterReturnsTrue))
-            {
-                save = true;
-            }
+            ImGui.InputFloat("Scale", ref _configScale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.EnterReturnsTrue);
         }
         else
         {
             ImGui.InputInt2("Size in pixels", ref _configWH[0]);
-        }
-
-        if (!_configIsEnabled)
-        {
-            ImGui.EndDisabled();
         }
 
         if (ImGui.BeginCombo("Borderless window workaround", _configDXVKDWMHackMode.ToHumanNameString()))

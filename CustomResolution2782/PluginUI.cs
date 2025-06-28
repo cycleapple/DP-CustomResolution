@@ -44,6 +44,11 @@ public sealed class PluginUI : IDisposable
         WindowSystem.Draw();
     }
 
+    public void UpdateFromConfig()
+    {
+        _configWindow.UpdateFromConfig();
+    }
+
     private void ShowConfigWindow()
     {
         SettingsVisible = true;

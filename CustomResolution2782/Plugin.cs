@@ -182,7 +182,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
         _currentHwnd = (HWND) win->WindowHandle;
 
-#if CRES_CLEAN
+#if CRES_CLEAN || true
         var _dev_hWnd = (IntPtr*) &dev->hWnd;
         var _dev_NewWidth = &dev->NewWidth;
         var _dev_NewHeight = &dev->NewHeight;

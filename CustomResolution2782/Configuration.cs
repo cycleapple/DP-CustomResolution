@@ -36,6 +36,7 @@ public class Configuration : IPluginConfiguration
     public void Save()
     {
         pluginInterface!.SavePluginConfig(this);
+        Service.PluginUI.UpdateFromConfig();
     }
 }
 
