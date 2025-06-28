@@ -117,6 +117,12 @@ public sealed unsafe class WndProcHook : IDisposable
             args.SuppressCall = true;
         }
 
+        if (args.Message == WM.WM_WINDOWPOSCHANGED)
+        {
+            var windowpos = (WINDOWPOS*) args.LParam;
+            Service.PluginLog.Debug($"WM_WINDOWPOSCHANGED {windowpos->cx} x {windowpos->cy}");
+        }
+
         if (args.Message == WM.WM_SIZE)
         {
             ParamToCoords(args.LParam, out int x, out int y);
@@ -145,7 +151,7 @@ public sealed unsafe class WndProcHook : IDisposable
         if (args.Message == WM.WM_NCCALCSIZE && args.WParam != 0 && plugin.CurrentBorderlessFullscreen &&
             Service.Config.DXVKDWMHackMode.IsSetClientEdge())
         {
-            NCCALCSIZE_PARAMS* ncsize = (NCCALCSIZE_PARAMS*) args.LParam;
+            var ncsize = (NCCALCSIZE_PARAMS*) args.LParam;
             MONITORINFO monitorInfo = new()
             {
                 cbSize = (uint) sizeof(MONITORINFO)
