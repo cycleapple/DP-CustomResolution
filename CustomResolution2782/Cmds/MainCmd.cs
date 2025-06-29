@@ -7,12 +7,12 @@ public sealed class MainCmd : Cmd
 {
     public override string Name => "cres";
 
-    public override string HelpMessage => $"Open / adjust the CustomResolution settings.\n" +
+    public override string HelpMessage => $"Open / adjust the CustomResolution display scale settings.\n" +
         $"\tExamples:\n" +
         $"\tTo open the settings:\n\t\t{FullName}\n" +
         $"\tTo enable / disable it:\n\t\t{FullName} on\n\t\t{FullName} off\n\t\t{FullName} toggle\n" +
-        $"\tTo set the scale:\n\t\t{FullName} 1.5\n" +
-        $"\tTo set the resolution:\n\t\t{FullName} 1920 1080";
+        $"\tTo set the display scale:\n\t\t{FullName} 1.5\n" +
+        $"\tTo set the display resolution:\n\t\t{FullName} 1920 1080";
 
     public override void Run(string arguments)
     {
@@ -34,33 +34,33 @@ public sealed class MainCmd : Cmd
                 return;
             }
 
-            Service.Config.IsScale = false;
-            Service.Config.Width = width;
-            Service.Config.Height = height;
+            Service.Config._.Display.IsScale = false;
+            Service.Config._.Display.Width = width;
+            Service.Config._.Display.Height = height;
             Service.Config.Save();
 
-            Service.PrintChat("Updated custom resolution.");
+            Service.PrintChat("Updated custom display resolution.");
             return;
         }
 
         switch (arguments.ToLowerInvariant())
         {
             case "on":
-                Service.Config.IsEnabled = true;
+                Service.Config._.Display.IsEnabled = true;
                 Service.Config.Save();
-                Service.PrintChat("Enabled custom resolution.");
+                Service.PrintChat("Enabled custom display resolution.");
                 return;
 
             case "off":
-                Service.Config.IsEnabled = false;
+                Service.Config._.Display.IsEnabled = false;
                 Service.Config.Save();
-                Service.PrintChat("Disabled custom resolution.");
+                Service.PrintChat("Disabled custom display resolution.");
                 return;
 
             case "toggle":
-                Service.Config.IsEnabled = !Service.Config.IsEnabled;
+                Service.Config._.Display.IsEnabled = !Service.Config._.Display.IsEnabled;
                 Service.Config.Save();
-                Service.PrintChat($"{(Service.Config.IsEnabled ? "Enabled" : "Disabled")} custom resolution.");
+                Service.PrintChat($"{(Service.Config._.Display.IsEnabled ? "Enabled" : "Disabled")} custom display resolution.");
                 return;
 
             case "debugon":
@@ -95,10 +95,10 @@ public sealed class MainCmd : Cmd
             return;
         }
         
-        Service.Config.IsScale = true;
-        Service.Config.Scale = value;
+        Service.Config._.Display.IsScale = true;
+        Service.Config._.Display.Scale = value;
         Service.Config.Save();
 
-        Service.PrintChat("Updated custom resolution scale.");
+        Service.PrintChat("Updated custom display resolution scale.");
     }
 }

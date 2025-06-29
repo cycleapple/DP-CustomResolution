@@ -1,151 +1,77 @@
 ﻿using Dalamud.Configuration;
 using Dalamud.Game.ClientState.Keys;
 using Dalamud.Plugin;
+using Newtonsoft.Json;
 using System;
-using System.Collections.Generic;
-using System.Reflection;
 
 namespace CustomResolution;
 
 [Serializable]
 public class Configuration : IPluginConfiguration
 {
-    public int Version { get; set; } = 0;
+    public ConfigurationV1 V1 = new();
+    public int Version { get; set; } = 1;
 
+    [JsonIgnore]
+    public ref ConfigurationV1 _ => ref V1;
+
+    [Obsolete]
     public bool IsEnabled = true;
+    [Obsolete]
     public bool IsScale = true;
+    [Obsolete]
     public float Scale = 1f;
+    [Obsolete]
     public uint Width = 1024;
+    [Obsolete]
     public uint Height = 1024;
-
+    [Obsolete]
     public VirtualKey HotkeyKey = VirtualKey.NO_KEY;
+    [Obsolete]
     public ModifierKey HotkeyModifier = ModifierKey.NONE;
-
+    [Obsolete]
     public DXVKDWMHackMode DXVKDWMHackMode = DXVKDWMHackMode.Off;
-
+    [Obsolete]
     public MinSizeMode MinSizeMode = MinSizeMode.Unchanged;
 
     [NonSerialized]
-    private IDalamudPluginInterface? pluginInterface;
+    private IDalamudPluginInterface pluginInterface = null!;
 
     internal void Initialize(IDalamudPluginInterface pluginInterface)
     {
         this.pluginInterface = pluginInterface;
+        Upgrade();
     }
 
     public void Save()
     {
-        pluginInterface!.SavePluginConfig(this);
+        _.Display.Clamp();
+        _.Game.Clamp();
+        pluginInterface.SavePluginConfig(this);
         Service.PluginUI.UpdateFromConfig();
     }
-}
 
-// Must explicitly map to integer values, blame Newtonsoft.JSON
-public enum DXVKDWMHackMode
-{
-    Off = 0,
-    UnsetPopup = 1,
-    SetClientEdgeResize = 3,
-    SetClientEdgeBorder = 2,
-}
-
-public static class DXVKDWMHackModeExt
-{
-    public static string ToHumanNameString(this DXVKDWMHackMode mode) => mode switch
+    private void Upgrade()
     {
-        DXVKDWMHackMode.Off => "Off",
-        DXVKDWMHackMode.UnsetPopup => "Best: -WS_POPUP",
-        DXVKDWMHackMode.SetClientEdgeResize => "+WS_EX_CLIENTEDGE (resize)",
-        DXVKDWMHackMode.SetClientEdgeBorder => "+WS_EX_CLIENTEDGE (border)",
-        _ => mode.ToString(),
-    };
-
-    public static string? ToHumanInfoString(this DXVKDWMHackMode mode) => mode switch
-    {
-        DXVKDWMHackMode.UnsetPopup => "Least intrusive option, try this first.\nWorks best with NVIDIA GPUs.",
-        DXVKDWMHackMode.SetClientEdgeResize => "Extends the game window 1 pixel to the bottom.\nDon't use if it makes text look blurry!",
-        DXVKDWMHackMode.SetClientEdgeBorder => "Adds a 1 pixel border around the game.",
-        _ => null
-    };
-
-    public static bool IsUnsetPopup(this DXVKDWMHackMode mode) => mode == DXVKDWMHackMode.UnsetPopup;
-
-    public static bool IsSetClientEdge(this DXVKDWMHackMode mode) => mode switch
-    {
-        DXVKDWMHackMode.SetClientEdgeResize => true,
-        DXVKDWMHackMode.SetClientEdgeBorder => true,
-        _ => false
-    };
-}
-
-public enum ModifierKey
-{
-    NONE = 0,
-    CTRL = 1,
-    ALT = 2,
-    SHIFT = 4
-}
-
-public static class VirtualKeyExt
-{
-    private static readonly Dictionary<VirtualKey, string> _strings = new();
-
-    static VirtualKeyExt()
-    {
-        foreach (var field in typeof(VirtualKey).GetFields(BindingFlags.Public | BindingFlags.Static))
+#pragma warning disable CS0612 // Type or member is obsolete, but we want to migrate from it.
+#pragma warning disable CS0618 // Type or member is obsolete, but we want to migrate from it.
+        if (Version == 0)
         {
-            var key = (VirtualKey) field.GetValue(null)!;
-            _strings[key] = key.GetFancyName();
+            Service.PluginLog.Info("Migrating config V0 to V1");
+            V1 = new();
+            // V1.Display.IsEnabled = IsEnabled; // Was enabled by default before, but let's disable.
+            V1.Display.IsScale = IsScale;
+            V1.Display.Scale = Scale;
+            V1.Display.Width = Width;
+            V1.Display.Height = Height;
+            V1.Display.HotkeyKey = HotkeyKey;
+            V1.Display.HotkeyModifier = HotkeyModifier;
+            V1.DXVKDWMHackMode = DXVKDWMHackMode;
+            V1.MinSizeMode = MinSizeMode;
+            V1.Display.Clamp();
+            Version++;
         }
+#pragma warning restore CS0612
+#pragma warning restore CS0618
     }
-
-    public static string ToHumanNameString(this VirtualKey mode)
-    {
-        return _strings[mode];
-    }
-
-    public static string? ToHumanInfoString(this VirtualKey mode) => mode switch
-    {
-        _ => null
-    };
-}
-
-public static class ModifierKeyExt
-{
-    public static string ToHumanNameString(this ModifierKey mode) => mode switch
-    {
-        ModifierKey.NONE => "None",
-        ModifierKey.CTRL => "Ctrl",
-        ModifierKey.ALT => "Alt",
-        ModifierKey.SHIFT => "Shift",
-        _ => mode.ToString(),
-    };
-
-    public static string? ToHumanInfoString(this ModifierKey mode) => mode switch
-    {
-        _ => null
-    };
-}
-
-public enum MinSizeMode
-{
-    Unchanged = 0,
-    Unlocked = 1
-}
-
-public static class MinSizeModeExt
-{
-    public static string ToHumanNameString(this MinSizeMode mode) => mode switch
-    {
-        MinSizeMode.Unchanged => "Unchanged (1024x768)",
-        MinSizeMode.Unlocked => "Unlocked",
-        _ => mode.ToString(),
-    };
-
-    public static string? ToHumanInfoString(this MinSizeMode mode) => mode switch
-    {
-        MinSizeMode.Unchanged => "The game normally doesn't allow resizing to smaller than 1024x768.",
-        MinSizeMode.Unlocked => "Allow resizing the game in windowed mode to smaller than 1024x768. Works best with scaling over 100%.",
-        _ => null
-    };
 }

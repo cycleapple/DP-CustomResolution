@@ -112,7 +112,7 @@ public sealed unsafe class WndProcHook : IDisposable
         }
 
         if (args.Message == WM.WM_WINDOWPOSCHANGING &&
-            Service.Config.MinSizeMode == MinSizeMode.Unlocked)
+            Service.Config._.MinSizeMode == MinSizeMode.Unlocked)
         {
             args.SuppressCall = true;
         }
@@ -127,8 +127,8 @@ public sealed unsafe class WndProcHook : IDisposable
         {
             ParamToCoords(args.LParam, out int x, out int y);
             Service.PluginLog.Debug($"WM_SIZE {x} x {y}");
-            Service.Plugin.Update();
-            args.LParam = SizeToParam(Service.Plugin.CurrentWidth, Service.Plugin.CurrentHeight);
+            Service.DisplaySize.Update();
+            args.LParam = SizeToParam(Service.DisplaySize.CurrentWidth, Service.DisplaySize.CurrentHeight);
         }
 
         if (WM.WM_MOUSEFIRST <= args.Message && args.Message <= WM.WM_MOUSELAST)
@@ -139,7 +139,7 @@ public sealed unsafe class WndProcHook : IDisposable
             Service.PluginLog.Debug($"WM_MOUSE A @ {x} {y}");
 #endif
 
-            plugin.ConvertCoordsWinToGame(ref x, ref y);
+            Service.DisplaySize.ConvertCoordsWinToGame(ref x, ref y);
 
 #if false
             Service.PluginLog.Debug($"WM_MOUSE B @ {x} {y}");
@@ -148,8 +148,8 @@ public sealed unsafe class WndProcHook : IDisposable
             args.LParam = CoordsToParam(x, y);
         }
 
-        if (args.Message == WM.WM_NCCALCSIZE && args.WParam != 0 && plugin.CurrentBorderlessFullscreen &&
-            Service.Config.DXVKDWMHackMode.IsSetClientEdge())
+        if (args.Message == WM.WM_NCCALCSIZE && args.WParam != 0 && Service.DisplaySize.CurrentBorderlessFullscreen &&
+            Service.Config._.DXVKDWMHackMode.IsSetClientEdge())
         {
             var ncsize = (NCCALCSIZE_PARAMS*) args.LParam;
             MONITORINFO monitorInfo = new()
@@ -157,12 +157,12 @@ public sealed unsafe class WndProcHook : IDisposable
                 cbSize = (uint) sizeof(MONITORINFO)
             };
 
-            if (MonitorFromWindow(plugin.CurrentHWND, MONITOR.MONITOR_DEFAULTTONEAREST) is { } monitor && monitor != HMONITOR.NULL &&
+            if (MonitorFromWindow(Service.DisplaySize.CurrentHWND, MONITOR.MONITOR_DEFAULTTONEAREST) is { } monitor && monitor != HMONITOR.NULL &&
                 GetMonitorInfo(monitor, &monitorInfo))
             {
                 ncsize->rgrc[0] = monitorInfo.rcMonitor;
 
-                switch (Service.Config.DXVKDWMHackMode)
+                switch (Service.Config._.DXVKDWMHackMode)
                 {
                     case DXVKDWMHackMode.SetClientEdgeResize:
                         ncsize->rgrc[0].bottom += 1;

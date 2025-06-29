@@ -1,9 +1,12 @@
 ﻿using Dalamud.Game.ClientState.Keys;
+using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
 using ImGuiNET;
 using System;
 using System.Linq;
 using System.Numerics;
+using System.Xml.Linq;
+using TerraFX.Interop.Windows;
 
 namespace CustomResolution.Windows;
 
@@ -11,17 +14,10 @@ public class ConfigWindow : Window, IDisposable
 {
     private VirtualKey[] _validKeys = new VirtualKey[] { VirtualKey.NO_KEY }.Union(Service.KeyState.GetValidVirtualKeys()).ToArray();
 
-    private int[] _displayCurrentWH = new int[2];
-    private int[] _displayCurrentWindowWH = new int[2];
+    private readonly int[] _displayCurrentWH = new int[2];
+    private readonly int[] _displayCurrentWindowWH = new int[2];
 
-    private bool _configIsEnabled;
-    private VirtualKey _configHotkeyKey;
-    private ModifierKey _configHotkeyModifier;
-    private bool _configIsScale;
-    private float _configScale;
-    private int[] _configWH = new int[2];
-    private DXVKDWMHackMode _configDXVKDWMHackMode;
-    private MinSizeMode _configMinSizeMode;
+    private ConfigurationV1 _;
 
     public ConfigWindow() : base(
         "CustomResolution",
@@ -36,65 +32,152 @@ public class ConfigWindow : Window, IDisposable
 
     public void UpdateFromConfig()
     {
-        var config = Service.Config;
-
-        _configIsEnabled = config.IsEnabled;
-        _configHotkeyKey = config.HotkeyKey;
-        _configHotkeyModifier = config.HotkeyModifier;
-        _configIsScale = config.IsScale;
-        _configScale = config.Scale;
-        _configWH[0] = (int) config.Width;
-        _configWH[1] = (int) config.Height;
-        _configDXVKDWMHackMode = config.DXVKDWMHackMode;
-        _configMinSizeMode = config.MinSizeMode;
+        _ = Service.Config._;
     }
 
     public void UpdateToConfig()
     {
-        var config = Service.Config;
-
-        config.IsEnabled = _configIsEnabled;
-        config.HotkeyKey = _configHotkeyKey;
-        config.HotkeyModifier = _configHotkeyModifier;
-        config.IsScale = _configIsScale;
-        config.Scale = _configScale;
-        config.Width = (uint) _configWH[0];
-        config.Height = (uint) _configWH[1];
-        config.DXVKDWMHackMode = _configDXVKDWMHackMode;
-        config.MinSizeMode = _configMinSizeMode;
-
-        config.Save();
+        Service.Config._ = _;
+        Service.Config.Save();
     }
 
     public override void Draw()
     {
-        var plugin = Service.Plugin;
         var save = false;
 
-        _displayCurrentWH[0] = (int) plugin.CurrentWidth;
-        _displayCurrentWH[1] = (int) plugin.CurrentHeight;
-        _displayCurrentWindowWH[0] = (int) plugin.CurrentWindowWidth;
-        _displayCurrentWindowWH[1] = (int) plugin.CurrentWindowHeight;
+        _displayCurrentWH[0] = (int) Service.DisplaySize.CurrentWidth;
+        _displayCurrentWH[1] = (int) Service.DisplaySize.CurrentHeight;
+        _displayCurrentWindowWH[0] = (int) Service.DisplaySize.CurrentWindowWidth;
+        _displayCurrentWindowWH[1] = (int) Service.DisplaySize.CurrentWindowHeight;
 
         ImGui.BeginDisabled();
         ImGui.InputInt2("Current window size", ref _displayCurrentWindowWH[0]);
-        ImGui.InputInt2("Current render size", ref _displayCurrentWH[0]);
+        ImGui.InputInt2("Current display size", ref _displayCurrentWH[0]);
         ImGui.EndDisabled();
 
-        ImGui.Checkbox("Enabled", ref _configIsEnabled);
+        using (var imTabBar = ImRaii.TabBar("MalfunctionMainTabs"))
+        {
+            DrawDisplayTab();
+
+            DrawGameTab();
+
+            DrawCommonTab();
+        }
+
+        if (ImGui.Button("Save and apply"))
+        {
+            save = true;
+        }
+
+        if (save)
+        {
+            UpdateToConfig();
+        }
+    }
+
+    private void DrawDisplayTab()
+    {
+        using var imTab = ImRaii.TabItem($"Display##DisplayTab");
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(@"The display resolution affects everything,
+including screenshots taken in-game and via ReShade.
+
+This works best with the ""High Resolution UI Settings""
+in the system configuration, as it also affects the UI.
+
+In general: Use it as a fake fullscreen / window resolution,
+best suited for screenshots.
+Changed via /cres");
+        }
+
+        if (!imTab.Success)
+        {
+            return;
+        }
+
+        DrawSizeTabContents(ref _.Display, "Display");
+    }
+
+    private void DrawGameTab()
+    {
+        using var imTab = ImRaii.TabItem($"Gameplay##GameTab");
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(@"The gameplay resolution affects only the quality of your character
+and everything around them, leaving the HUD untouched.
+This also doesn't touch the screenshot resolution.
+
+This works as an advanced version of the in-game ""3D Resolution Scaling"" graphics options,
+allowing you to go smaller than 0.5x for more FPS, or higher than 1x for higher quality.
+
+This overrides dynamic resolution!
+
+In general: Use it for gameplay, not for screenshots.
+Changed via /gres");
+        }
+
+        if (!imTab.Success)
+        {
+            return;
+        }
+
+#if false
+        if (Service.GameSize.CurrentDynRezoConfig)
+        {
+            using (ImRaii.PushColor(ImGuiCol.Border, 0xff00ffff))
+            {
+                if (ImGui.Button(@"This might not work properly while in-game dynamic resolution is enabled!
+Click here to disable it."))
+                {
+                    Service.GameSize.ForceDynRezoConfig(false);
+                }
+
+                ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeight() * 0.1f));
+            }
+        }
+#endif
+
+        DrawSizeTabContents(ref _.Game, "Game", scaleOnly: true);
+
+        if (ImGui.BeginCombo("Graphics Upscaling", _.ResolutionScalingMode.ToHumanNameString()))
+        {
+            foreach (var mode in Enum.GetValues<ResolutionScalingMode>())
+            {
+                if (ImGui.Selectable(mode.ToHumanNameString(), _.ResolutionScalingMode == mode, mode.IsUnsupported() ? ImGuiSelectableFlags.Disabled : ImGuiSelectableFlags.None))
+                {
+                    _.ResolutionScalingMode = mode;
+                }
+
+                if (ImGui.IsItemHovered(ImGuiHoveredFlags.AllowWhenDisabled) && mode.ToHumanInfoString() is { } info)
+                {
+                    ImGui.SetTooltip(info);
+                }
+            }
+
+            ImGui.EndCombo();
+        }
+    }
+
+
+    private void DrawSizeTabContents(ref ConfigurationV1.SizeConfig size, string name, bool scaleOnly = false)
+    {
+        ImGui.Checkbox("Enabled", ref size.IsEnabled);
 
         ImGui.SameLine();
         ImGui.Dummy(new Vector2(20, 0));
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(80);
-        if (ImGui.BeginCombo("##_configHotkeyModifier", _configHotkeyModifier.ToHumanNameString()))
+        if (ImGui.BeginCombo($"##_{name}_configHotkeyModifier", size.HotkeyModifier.ToHumanNameString()))
         {
             foreach (var key in Enum.GetValues<ModifierKey>())
             {
-                if (ImGui.Selectable(key.ToHumanNameString(), _configHotkeyModifier == key, ImGuiSelectableFlags.None))
+                if (ImGui.Selectable(key.ToHumanNameString(), size.HotkeyModifier == key, ImGuiSelectableFlags.None))
                 {
-                    _configHotkeyModifier = key;
+                    size.HotkeyModifier = key;
                 }
 
                 if (ImGui.IsItemHovered() && key.ToHumanInfoString() is { } info)
@@ -108,13 +191,13 @@ public class ConfigWindow : Window, IDisposable
 
         ImGui.SameLine();
         ImGui.SetNextItemWidth(160);
-        if (ImGui.BeginCombo("##_configHotkeyKey", _configHotkeyKey.ToHumanNameString()))
+        if (ImGui.BeginCombo($"##_{name}_configHotkeyKey", size.HotkeyKey.ToHumanNameString()))
         {
             foreach (var key in _validKeys)
             {
-                if (ImGui.Selectable(key.ToHumanNameString(), _configHotkeyKey == key, ImGuiSelectableFlags.None))
+                if (ImGui.Selectable(key.ToHumanNameString(), size.HotkeyKey == key, ImGuiSelectableFlags.None))
                 {
-                    _configHotkeyKey = key;
+                    size.HotkeyKey = key;
                 }
 
                 if (ImGui.IsItemHovered() && key.ToHumanInfoString() is { } info)
@@ -130,34 +213,27 @@ public class ConfigWindow : Window, IDisposable
         ImGui.Text("Hotkey");
 
 
-        ImGui.Checkbox("Use scale", ref _configIsScale);
-
-        if (_configIsScale)
+        if (!scaleOnly)
         {
-            ImGui.InputFloat("Scale", ref _configScale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.EnterReturnsTrue);
+            ImGui.Checkbox("Use scale", ref size.IsScale);
+        }
+
+        if (size.IsScale || scaleOnly)
+        {
+            ImGui.InputFloat("Scale", ref size.Scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.EnterReturnsTrue);
         }
         else
         {
-            ImGui.InputInt2("Size in pixels", ref _configWH[0]);
-        }
-
-        if (ImGui.BeginCombo("Borderless window workaround", _configDXVKDWMHackMode.ToHumanNameString()))
-        {
-            foreach (var mode in Enum.GetValues<DXVKDWMHackMode>())
+            unsafe
             {
-                if (ImGui.Selectable(mode.ToHumanNameString(), _configDXVKDWMHackMode == mode, ImGuiSelectableFlags.None))
-                {
-                    _configDXVKDWMHackMode = mode;
-                }
-
-                if (ImGui.IsItemHovered() && mode.ToHumanInfoString() is { } info)
-                {
-                    ImGui.SetTooltip(info);
-                }
+                ImGui.InputInt2("Size in pixels", ref size.WH[0]);
             }
-
-            ImGui.EndCombo();
         }
+    }
+
+    private void DrawCommonTab()
+    {
+        using var imTab = ImRaii.TabItem($"Common##CommonTab");
 
         if (ImGui.IsItemHovered())
         {
@@ -172,13 +248,18 @@ Works even with the scaling above disabled.
 Not intended to be used with proper fullscreen.");
         }
 
-        if (ImGui.BeginCombo("Minimum window size", _configMinSizeMode.ToHumanNameString()))
+        if (!imTab.Success)
         {
-            foreach (var mode in Enum.GetValues<MinSizeMode>())
+            return;
+        }
+
+        if (ImGui.BeginCombo("Borderless window workaround", _.DXVKDWMHackMode.ToHumanNameString()))
+        {
+            foreach (var mode in Enum.GetValues<DXVKDWMHackMode>())
             {
-                if (ImGui.Selectable(mode.ToHumanNameString(), _configMinSizeMode == mode, ImGuiSelectableFlags.None))
+                if (ImGui.Selectable(mode.ToHumanNameString(), _.DXVKDWMHackMode == mode, ImGuiSelectableFlags.None))
                 {
-                    _configMinSizeMode = mode;
+                    _.DXVKDWMHackMode = mode;
                 }
 
                 if (ImGui.IsItemHovered() && mode.ToHumanInfoString() is { } info)
@@ -190,14 +271,28 @@ Not intended to be used with proper fullscreen.");
             ImGui.EndCombo();
         }
 
-        if (ImGui.Button("Save and apply"))
+        if (ImGui.IsItemHovered())
         {
-            save = true;
+            ImGui.SetTooltip(@"Smaller tweaks and fixes, f.e. for DXVK on Windows,
+or to allow making the window smaller than 1024x768.");
         }
 
-        if (save)
+        if (ImGui.BeginCombo("Minimum window size", _.MinSizeMode.ToHumanNameString()))
         {
-            UpdateToConfig();
+            foreach (var mode in Enum.GetValues<MinSizeMode>())
+            {
+                if (ImGui.Selectable(mode.ToHumanNameString(), _.MinSizeMode == mode, ImGuiSelectableFlags.None))
+                {
+                    _.MinSizeMode = mode;
+                }
+
+                if (ImGui.IsItemHovered() && mode.ToHumanInfoString() is { } info)
+                {
+                    ImGui.SetTooltip(info);
+                }
+            }
+
+            ImGui.EndCombo();
         }
     }
 }

@@ -10,6 +10,9 @@ public sealed class Service
 {
     public static Plugin Plugin { get; internal set; } = null!;
 
+    public static DisplaySizeState DisplaySize { get; internal set; } = null!;
+    public static GameSizeState GameSize { get; internal set; } = null!;
+
     public static Configuration Config { get; internal set; } = null!;
 
     public static DebugConfiguration DebugConfig { get; internal set; } = null!;

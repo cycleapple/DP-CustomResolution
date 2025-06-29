@@ -4,6 +4,7 @@ using Dalamud.Game.Config;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
+using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.Interop;
 using ImGuiNET;
@@ -11,6 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Xml.Linq;
 using TerraFX.Interop.Windows;
 using static TerraFX.Interop.Windows.Windows;
 
@@ -20,28 +22,18 @@ public sealed unsafe class Plugin : IDalamudPlugin
 {
     private object _disposeLock = new();
 
-    private readonly HRGN _invisibleRgn;
-
     private readonly List<Cmd> _cmds;
-    private bool _unloading = false;
-    private bool _wasEnabled = false;
-    private HWND _currentHwnd;
-    private bool _currentHwndMismatch = false;
-    private RECT _currentClientRect;
-    private DXVKDWMHackMode _currentDXVKDWMHackMode = DXVKDWMHackMode.Off;
     private bool _ignoreConfigChanges = false;
-    private bool _currentlyFakeResize = false;
-    private bool _requestedResolutionChange = false;
 
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
-        _invisibleRgn = CreateRectRgn(0, 0, -1, -1);
-
         pluginInterface.Create<Service>();
 
         Service.Plugin = this;
 
-        Service.DebugConfig = new DebugConfiguration();
+        Service.DebugConfig = new();
+        Service.DisplaySize = new();
+        Service.GameSize = new();
 
         Service.Config = Service.PluginInterface.GetPluginConfig() as Configuration ?? new();
         Service.Config.Initialize(Service.PluginInterface);
@@ -68,25 +60,18 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public string Name => "CustomResolution";
 
-    public HWND CurrentHWND => _currentHwnd;
-
-    public uint CurrentWidth { get; private set; }
-    public uint CurrentHeight { get; private set; }
-    public uint CurrentWindowWidth { get; private set; }
-    public uint CurrentWindowHeight { get; private set; }
-
-    public bool CurrentBorderlessFullscreen { get; private set; }
+    public bool Unloading { get; private set; } = false;
 
     public void Dispose()
     {
-        _unloading = true;
+        Unloading = true;
 
         lock (_disposeLock)
         {
             Service.Framework.Update -= OnFrameworkUpdate;
             Service.GameConfig.SystemChanged -= OnSystemConfigChanged;
-
-            Service.Framework.RunOnFrameworkThread(Update);
+            Service.DisplaySize.Dispose();
+            Service.GameSize.Dispose();
         }
 
         foreach (Cmd cmd in _cmds)
@@ -103,326 +88,23 @@ public sealed unsafe class Plugin : IDalamudPlugin
         Service.Plugin = null!;
     }
 
-    public void ConvertCoordsWinToGame(ref int x, ref int y)
+    private void OnFrameworkUpdateForSize(ref ConfigurationV1.SizeConfig size)
     {
-        if (CurrentWidth == CurrentWindowWidth && CurrentHeight == CurrentWindowHeight)
-        {
-            return;
-        }
+        var io = ImGui.GetIO();
 
-        var scaleX = CurrentWidth / (float) CurrentWindowWidth;
-        var scaleY = CurrentHeight / (float) CurrentWindowHeight;
-
-        x = (int) Math.Round(x * scaleX);
-        y = (int) Math.Round(y * scaleY);
-    }
-
-    public void ConvertCoordsGameToWin(ref int x, ref int y)
-    {
-        if (CurrentWidth == CurrentWindowWidth && CurrentHeight == CurrentWindowHeight)
-        {
-            return;
-        }
-
-        var scaleX = CurrentWindowWidth / (float) CurrentWidth;
-        var scaleY = CurrentWindowHeight / (float) CurrentHeight;
-
-        x = (int) Math.Round(x * scaleX);
-        y = (int) Math.Round(y * scaleY);
-    }
-
-    public void ConvertCoordsGlobalToGame(ref int x, ref int y)
-    {
-        if (CurrentWidth == CurrentWindowWidth && CurrentHeight == CurrentWindowHeight)
-        {
-            return;
-        }
-
-        var scaleX = CurrentWidth / (float) CurrentWindowWidth;
-        var scaleY = CurrentHeight / (float) CurrentWindowHeight;
-
-        var p = new POINT(x, y);
-
-        Service.CursorPosHooks.ScreenToClientOrig(_currentHwnd, &p);
-
-        p.x = (int) Math.Round(p.x * scaleX);
-        p.y = (int) Math.Round(p.y * scaleY);
-
-        Service.CursorPosHooks.ClientToScreenOrig(_currentHwnd, &p);
-
-        x = p.x;
-        y = p.y;
-    }
-
-    public void ConvertCoordsGameToGlobal(ref int x, ref int y)
-    {
-        if (CurrentWidth == CurrentWindowWidth && CurrentHeight == CurrentWindowHeight)
-        {
-            return;
-        }
-
-        var scaleX = CurrentWindowWidth / (float) CurrentWidth;
-        var scaleY = CurrentWindowHeight / (float) CurrentHeight;
-
-        var p = new POINT(x, y);
-
-        Service.CursorPosHooks.ScreenToClientOrig(_currentHwnd, &p);
-
-        p.x = (int) Math.Round(p.x * scaleX);
-        p.y = (int) Math.Round(p.y * scaleY);
-
-        Service.CursorPosHooks.ClientToScreenOrig(_currentHwnd, &p);
-
-        x = p.x;
-        y = p.y;
-    }
-
-    public void Update()
-    {
-        var dev = Device.Instance();
-        var framework = Framework.Instance();
-        var win = framework->GameWindow;
-
-        _currentHwnd = (HWND) win->WindowHandle;
-
-#if CRES_CLEAN || true
-        var _dev_hWnd = (IntPtr*) &dev->hWnd;
-        var _dev_NewWidth = &dev->NewWidth;
-        var _dev_NewHeight = &dev->NewHeight;
-        var _dev_RequestResolutionChange = &dev->RequestResolutionChange;
-#else
-        // 7.2 adds 1B8 before hWnd (previously 820, now 9D8)
-        var _dev_hWnd = (nint*) ((IntPtr) dev + 0x9D8);
-        var _dev_NewWidth = (uint*) ((IntPtr) dev + 0x9D8 + 0x10);
-        var _dev_NewHeight = (uint*) ((IntPtr) dev + 0x9D8 + 0x14);
-        var _dev_RequestResolutionChange = &dev->RequestResolutionChange;
-#endif
-
-        // As a safety measure, don't mess with the structs if we're reading garbage.
-        // This isn't perfect, but it's better than nothing.
-        if (_currentHwnd != *_dev_hWnd)
-        {
-            if (!_currentHwndMismatch)
+        if (size.HotkeyKey != VirtualKey.NO_KEY &&
+            (ImGuiNative.igIsKeyPressed((ImGuiKey) size.HotkeyKey, 0) != 0 || Service.KeyState.GetRawValue(size.HotkeyKey) != 0) &&
+            (size.HotkeyModifier switch
             {
-                _currentHwndMismatch = true;
-                Service.PluginLog.Error($"HWND MISMATCH between GameWindow and Device: 0x{(long) (IntPtr) (_currentHwnd):X16} vs 0x{(long) *_dev_hWnd:X16}");
-                Service.PluginLog.Info($"dev is at: 0x{(long) (IntPtr) dev:X16}");
-                CheckHWND("GameWindow", _currentHwnd);
-                CheckHWND("Device", (HWND) (*_dev_hWnd));
-            }
-
-            return;
-        }
-
-        _currentHwndMismatch = false;
-
-        fixed (RECT* currentClientRectPtr = &_currentClientRect)
+                ModifierKey.NONE => !io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
+                ModifierKey.CTRL => io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
+                ModifierKey.ALT => !io.KeyCtrl && io.KeyAlt && !io.KeyShift,
+                ModifierKey.SHIFT => !io.KeyCtrl && !io.KeyAlt && io.KeyShift,
+                _ => false,
+            }))
         {
-            Service.WindowRectHooks.GetClientRectOrig(_currentHwnd, currentClientRectPtr);
-        }
-
-        var rectWidth = _currentClientRect.right - _currentClientRect.left;
-        var rectHeight = _currentClientRect.bottom - _currentClientRect.top;
-
-        if ((rectWidth <= 0 || rectHeight <= 0) && !_unloading)
-        {
-            return;
-        }
-
-        var enabled = !_unloading && Service.Config.IsEnabled;
-
-        uint width, height;
-
-        if (Service.Config.IsScale || !enabled)
-        {
-            var scale = enabled ? Service.Config.Scale : 1f;
-
-            width = (uint) Math.Round(rectWidth * scale);
-            height = (uint) Math.Round(rectHeight * scale);
-        }
-        else
-        {
-            width = Service.Config.Width;
-            height = Service.Config.Height;
-        }
-
-        if (width < 256)
-        {
-            width = 256;
-        }
-
-        if (height < 256)
-        {
-            height = 256;
-        }
-
-        _requestedResolutionChange |= (*_dev_RequestResolutionChange) != 0;
-
-        if (!_currentlyFakeResize && (_unloading || enabled || _wasEnabled || _requestedResolutionChange) &&
-            (width != dev->Width || height != dev->Height))
-        {
-            Service.PluginLog.Info($"Changing graphics resolution from {dev->Width} x {dev->Height} to {width} x {height}");
-            var mode = Service.DebugConfig.ForceSizeMode;
-            if (_requestedResolutionChange)
-            {
-                // Let's try to be cautious about other plugins (f.e. SimpleTweaks) changing the game resolution.
-                Service.PluginLog.Info($"Game resolution was changed externally - forcing resize via device, not window resize.");
-                mode = ForceSizeMode.LegacyRequestResolutionChange;
-                _requestedResolutionChange = false;
-            }
-            switch (mode)
-            {
-                case ForceSizeMode.Skip:
-                    break;
-                case ForceSizeMode.LegacyRequestResolutionChange:
-                    *_dev_NewWidth = width;
-                    *_dev_NewHeight = height;
-                    *_dev_RequestResolutionChange = 1;
-                    Service.PluginLog.Info($"Changing game window from {win->WindowWidth} x {win->WindowHeight} to {width} x {height}");
-                    win->WindowWidth = (int) width;
-                    win->WindowHeight = (int) height;
-                    break;
-                case ForceSizeMode.FakeWindowResize:
-                    var adjustedClientRect = new RECT(0, 0, rectWidth, rectHeight);
-                    AdjustWindowRect(&adjustedClientRect, (uint) GetWindowLongPtr(_currentHwnd, GWL.GWL_STYLE), false);
-                    var adjustedWidth = adjustedClientRect.right - adjustedClientRect.left;
-                    var adjustedHeight = adjustedClientRect.bottom - adjustedClientRect.top;
-                    Service.PluginLog.Info($"Resizing window to {adjustedWidth} x {adjustedHeight}");
-                    try
-                    {
-                        _currentlyFakeResize = true;
-                        SendMessage(_currentHwnd, WM.WM_ENTERSIZEMOVE, 0, 0);
-                        SendMessage(_currentHwnd, WM.WM_SIZE, SIZE_MAXSHOW, WndProcHook.SizeToParam((uint) adjustedWidth, (uint) adjustedHeight));
-                        SendMessage(_currentHwnd, WM.WM_PAINT, 0, 0);
-                        SendMessage(_currentHwnd, WM.WM_EXITSIZEMOVE, 0, 0);
-                    }
-                    finally
-                    {
-                        _currentlyFakeResize = false;
-                    }
-                    break;
-                default:
-                    Service.PluginLog.Error($"Unknown ForceSizeMode: {Service.DebugConfig.ForceSizeMode}");
-                    break;
-            }
-        }
-
-        if (_wasEnabled != enabled)
-        {
-            Service.PluginLog.Info($"Changed state to: {enabled}");
-            _wasEnabled = enabled;
-        }
-
-        //Service.PluginLog.Debug($"NewWidth 0x{(long) (IntPtr) (&dev->NewWidth):X16}");
-        //Service.PluginLog.Debug($"GameWindow->Width 0x{(long) (IntPtr) (&win->WindowWidth):X16}");
-
-        //Service.PluginLog.Info($"Game window at {win->WindowWidth} x {win->WindowHeight}");
-
-        //Service.PluginLog.Info($"AAA {Service.GameConfig.System.GetUInt(nameof(SystemConfigOption.UiHighScale))}");
-
-        CurrentBorderlessFullscreen = win->Borderless;
-
-        if (Service.Config.DXVKDWMHackMode != DXVKDWMHackMode.Off && !_unloading)
-        {
-            SetDXVKDWMHack(Service.Config.DXVKDWMHackMode);
-        }
-        else if (Service.Config.DXVKDWMHackMode == DXVKDWMHackMode.Off && _currentDXVKDWMHackMode != DXVKDWMHackMode.Off)
-        {
-            SetDXVKDWMHack(DXVKDWMHackMode.Off);
-        }
-
-        CurrentWidth = width;
-        CurrentHeight = height;
-        CurrentWindowWidth = (uint) rectWidth;
-        CurrentWindowHeight = (uint) rectHeight;
-    }
-
-    private void SetDXVKDWMHack(DXVKDWMHackMode mode)
-    {
-        /* Default maximized style / exstyle is 0x95000000 / 0.
-         * WS.WS_POPUP | WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_MAXIMIZE
-         * Default windowed style / exstyle is 0x14CF0000 / 0.
-         * WS.WS_VISIBLE | WS.WS_CLIPSIBLINGS | WS.WS_CAPTION | WS.WS_SYSMENU | WS.WS_THICKFRAME | WS.WS_MINIMIZEBOX | WS.WS_MAXIMIZEBOX
-         */
-        var styleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_STYLE);
-        var exstyleOrig = (uint) GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE);
-
-        var style = styleOrig;
-        var exstyle = exstyleOrig;
-
-        var fullscreen = (style & WS.WS_SYSMENU) == 0;
-
-        if (Service.DebugConfig.IsDebug)
-        {
-            Service.PluginLog.Info("--------");
-            Service.PluginLog.Info($"STYLE: 0x{style:X8}");
-            Service.PluginLog.Info($"EXSTYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE):X8}");
-
-            Span<ushort> name = stackalloc ushort[256];
-            GetClassName(_currentHwnd, name.GetPointer(0), name.Length);
-            WNDCLASSEXW wce;
-            GetClassInfoEx(GetModuleHandle(null), name.GetPointer(0), &wce);
-
-            Service.PluginLog.Info($"CLASS: {new string((char*) name.GetPointer(0))}");
-            Service.PluginLog.Info($"CLASS.style: 0x{wce.style:X8}");
-        }
-
-        if (fullscreen)
-        {
-            if (mode == DXVKDWMHackMode.UnsetPopup)
-            {
-                style &= ~WS.WS_POPUP;
-            }
-            else
-            {
-                style |= WS.WS_POPUP;
-            }
-        }
-
-        if (fullscreen && mode.IsSetClientEdge())
-        {
-            exstyle |= WS.WS_EX_CLIENTEDGE;
-            exstyle |= WS.WS_EX_COMPOSITED;
-        }
-        else
-        {
-            exstyle &= ~(uint) WS.WS_EX_CLIENTEDGE;
-            exstyle &= ~(uint) WS.WS_EX_COMPOSITED;
-        }
-
-        if (Service.DebugConfig.IsDebug)
-        {
-            Service.PluginLog.Info($"NEWSTYLE: 0x{style:X8}");
-            Service.PluginLog.Info($"NEWEXSTYLE: 0x{exstyle:X8}");
-        }
-
-        if (style != styleOrig || exstyle != exstyleOrig || _currentDXVKDWMHackMode != mode)
-        {
-            if (Service.DebugConfig.IsDebug)
-            {
-                Service.PluginLog.Info("UPDATE");
-            }
-
-            SetWindowLong(_currentHwnd, GWL.GWL_STYLE, (int) style);
-            SetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE, (int) exstyle);
-
-            SetWindowPos(_currentHwnd, HWND.NULL, 0, 0, 0, 0, SWP.SWP_NOZORDER | SWP.SWP_NOMOVE | SWP.SWP_NOSIZE | SWP.SWP_NOACTIVATE | SWP.SWP_DRAWFRAME);
-            ShowWindow(_currentHwnd, SW.SW_SHOW);
-        }
-        else if (Service.DebugConfig.IsDebug)
-        {
-            Service.PluginLog.Info("SAME");
-        }
-
-        _currentDXVKDWMHackMode = mode;
-    }
-
-    private void CheckHWND(string from, HWND hwnd)
-    {
-        RECT rect = default;
-        if (!GetClientRect(hwnd, &rect))
-        {
-            Service.PluginLog.Info($"{from} is sus: {Marshal.GetLastPInvokeErrorMessage()}");
+            size.IsEnabled = !size.IsEnabled;
+            Service.Config.Save();
         }
     }
 
@@ -430,24 +112,11 @@ public sealed unsafe class Plugin : IDalamudPlugin
     {
         lock (_disposeLock)
         {
-            var io = ImGui.GetIO();
+            OnFrameworkUpdateForSize(ref Service.Config._.Display);
+            OnFrameworkUpdateForSize(ref Service.Config._.Game);
 
-            if (Service.Config.HotkeyKey != VirtualKey.NO_KEY &&
-                (ImGuiNative.igIsKeyPressed((ImGuiKey) Service.Config.HotkeyKey, 0) != 0 || Service.KeyState.GetRawValue(Service.Config.HotkeyKey) != 0) &&
-                (Service.Config.HotkeyModifier switch
-                {
-                    ModifierKey.NONE => !io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
-                    ModifierKey.CTRL => io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
-                    ModifierKey.ALT => !io.KeyCtrl && io.KeyAlt && !io.KeyShift,
-                    ModifierKey.SHIFT => !io.KeyCtrl && !io.KeyAlt && io.KeyShift,
-                    _ => false,
-                }))
-            {
-                Service.Config.IsEnabled = !Service.Config.IsEnabled;
-                Service.Config.Save();
-            }
-
-            Update();
+            Service.DisplaySize.Update();
+            Service.GameSize.Update();
         }
     }
 
@@ -469,11 +138,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
             case SystemConfigOption.ScreenHeight:
                 if (Service.DebugConfig.SetWindowSizeMode == SetWindowSizeMode.InterceptSystemConfig)
                 {
+                    var d = Service.DisplaySize;
                     var name = e.ConfigOption.ToString();
                     var valueOrig = Service.GameConfig.System.GetUInt(name);
 
                     var isW = e.ConfigOption == SystemConfigOption.ScreenWidth;
-                    var scale = (isW ? CurrentWindowWidth : CurrentWindowHeight) / (float) (isW ? CurrentWidth : CurrentHeight);
+                    var scale = (isW ? d.CurrentWindowWidth : d.CurrentWindowHeight) / (float) (isW ? d.CurrentWidth : d.CurrentHeight);
                     var valueNew = (uint) Math.Round(valueOrig * scale);
 
                     Service.PluginLog.Info($"Intercepting config value change for {name}: {valueOrig} -> {valueNew}");
@@ -491,23 +161,4 @@ public sealed unsafe class Plugin : IDalamudPlugin
                 break;
         }
     }
-}
-
-public enum ForceSizeMode
-{
-    Skip = -1,
-
-    /// <summary>
-    /// Fake a window resize event.
-    /// </summary>
-    FakeWindowResize = 0,
-
-    /// <summary>
-    /// Legacy mode, went through more initial testing, works well except for conflicts with other plugins.
-    /// Might revert or remove depending on how FakeWindowResize testing / fixups proceed.
-    ///
-    /// Update the graphics device width / height and set RequestResolutionChange.
-    /// This is the same method that other plugins such as SimpleTweaks or XIVWindowResizer use.
-    /// </summary>
-    LegacyRequestResolutionChange = 1
 }

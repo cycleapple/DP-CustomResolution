@@ -80,7 +80,7 @@ public sealed unsafe class CursorPosHooks : IDisposable
         Service.PluginLog.Debug($"GetCursorPos A @ {lpPoint->x} {lpPoint -> y}");
 #endif
 
-        Service.Plugin.ConvertCoordsGlobalToGame(ref lpPoint->x, ref lpPoint->y);
+        Service.DisplaySize.ConvertCoordsGlobalToGame(ref lpPoint->x, ref lpPoint->y);
 
 #if false
         Service.PluginLog.Debug($"GetCursorPos B @ {lpPoint->x} {lpPoint->y}");
@@ -95,7 +95,7 @@ public sealed unsafe class CursorPosHooks : IDisposable
         Service.PluginLog.Debug($"SetCursorPos A @ {x} {y}");
 #endif
 
-        Service.Plugin.ConvertCoordsGameToGlobal(ref x, ref y);
+        Service.DisplaySize.ConvertCoordsGameToGlobal(ref x, ref y);
 
 #if false
         Service.PluginLog.Debug($"SetCursorPos B @ {x} {y}");
