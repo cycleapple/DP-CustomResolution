@@ -15,6 +15,10 @@ public sealed class PluginUI : IDisposable
         Service.PluginInterface.UiBuilder.OpenConfigUi += ShowConfigWindow;
 
         WindowSystem.AddWindow(_configWindow = new ConfigWindow());
+
+#if DEBUG
+        SettingsVisible = true;
+#endif
     }
 
     public WindowSystem WindowSystem { get; } = new("CustomResolution");

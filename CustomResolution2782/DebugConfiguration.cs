@@ -6,7 +6,12 @@ namespace CustomResolution;
 /// </summary>
 public class DebugConfiguration
 {
-    public bool IsDebug { get; set; } = false;
+    public bool IsDebug { get; set; } =
+#if DEBUG
+        true;
+#else
+        false;
+#endif
 
     public SetWindowSizeMode SetWindowSizeMode { get; set; } = SetWindowSizeMode.InterceptSystemConfig;
 
