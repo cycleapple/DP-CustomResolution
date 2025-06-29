@@ -90,10 +90,16 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdateForSize(ref ConfigurationV1.SizeConfig size)
     {
-        var io = ImGui.GetIO();
+        if (size.HotkeyKey == VirtualKey.NO_KEY)
+        {
+            return;
+        }
 
-        if (size.HotkeyKey != VirtualKey.NO_KEY &&
-            (ImGuiNative.igIsKeyPressed((ImGuiKey) size.HotkeyKey, 0) != 0 || Service.KeyState.GetRawValue(size.HotkeyKey) != 0) &&
+        var io = ImGui.GetIO();
+        var keyPressedIm = ImGuiNative.igIsKeyPressed((ImGuiKey) size.HotkeyKey, 0) != 0;
+        var keyDownXiv = Service.KeyState.GetRawValue(size.HotkeyKey) != 0;
+
+        if ((keyPressedIm || (keyDownXiv && !size.HotkeyKeyDown)) &&
             (size.HotkeyModifier switch
             {
                 ModifierKey.NONE => !io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
@@ -106,6 +112,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
             size.IsEnabled = !size.IsEnabled;
             Service.Config.Save();
         }
+
+        size.HotkeyKeyDown = keyDownXiv;
     }
 
     private void OnFrameworkUpdate(IFramework framework)

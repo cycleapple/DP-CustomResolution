@@ -41,6 +41,9 @@ public struct ConfigurationV1
         public VirtualKey HotkeyKey = VirtualKey.NO_KEY;
         public ModifierKey HotkeyModifier = ModifierKey.NONE;
 
+        [NonSerialized]
+        public bool HotkeyKeyDown = false;
+
         public SizeConfig()
         {
             Width = 1024;
