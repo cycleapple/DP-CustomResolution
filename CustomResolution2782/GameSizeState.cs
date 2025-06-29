@@ -28,6 +28,8 @@ public unsafe class GameSizeState : IDisposable
     public ResolutionScalingMode ConfigGraphicsRezoType { get; private set; }
     public float ConfigGraphicsRezoScale { get; private set; }
 
+    public string DebugInfo { get; private set; } = "";
+
     public void Dispose()
     {
         Service.Framework.RunOnFrameworkThread(Update);
@@ -60,6 +62,14 @@ public unsafe class GameSizeState : IDisposable
         //Service.PluginLog.Debug($"GraphicsRezoScale 0x{(long) (IntPtr) (&gfx->GraphicsRezoScale):X16}");
         //Service.PluginLog.Debug($"RTM 0x{(long) (IntPtr) rtm:X16}");
 
+        if (Service.DebugConfig.IsDebug)
+        {
+            DebugInfo = @$"DR {gfx->DynamicRezoEnable}
+RTM {rtm->Resolution_Width} x {rtm->Resolution_Height}
+RTM H {rtm->DynamicResolutionActualTargetHeight} {rtm->DynamicResolutionTargetHeight} {rtm->DynamicResolutionMaximumHeight} {rtm->DynamicResolutionMinimumHeight}
+RTM S {rtm->GraphicsRezoScalePrev} {rtm->GraphicsRezoScaleGlassWidth} {rtm->GraphicsRezoScaleGlassHeight} {rtm->GraphicsRezoScaleGlassWidth} {rtm->GraphicsRezoScaleGlassHeight}";
+        }
+
         bool unloading = Service.Plugin.Unloading;
         bool enabled = !unloading && cfg.IsEnabled;
 
@@ -91,13 +101,6 @@ public unsafe class GameSizeState : IDisposable
         rtm->DynamicResolutionMaximumHeight = (ushort) (dev->Height * gfx->GraphicsRezoScale);
         rtm->DynamicResolutionMinimumHeight = (ushort) (dev->Height * gfx->GraphicsRezoScale);
         */
-
-#if false
-        Service.PluginLog.Debug($"DR {gfx->DynamicRezoEnable}");
-        Service.PluginLog.Debug($"RTM {rtm->Resolution_Width} x {rtm->Resolution_Height}");
-        Service.PluginLog.Debug($"RTM H {rtm->DynamicResolutionActualTargetHeight} {rtm->DynamicResolutionTargetHeight} {rtm->DynamicResolutionMaximumHeight} {rtm->DynamicResolutionMinimumHeight}");
-        Service.PluginLog.Debug($"RTM S {rtm->GraphicsRezoScales[0]} {rtm->GraphicsRezoScales[1]} {rtm->GraphicsRezoScales[2]} {rtm->GraphicsRezoScales[3]} {rtm->GraphicsRezoScales[4]}");
-#endif
     }
 
     // RenderTargetManager is updated very sporadically, and some fields we need flew out
@@ -131,9 +134,6 @@ public unsafe class GameSizeState : IDisposable
         [FieldOffset(0x6F0 + 2 * 3)]
         public ushort DynamicResolutionMinimumHeight;
 
-        public const int GraphicsRezoScalesCount = 5;
-        [FieldOffset(0x70C)]
-        public fixed float GraphicsRezoScales[GraphicsRezoScalesCount];
         [FieldOffset(0x70C + 4 * 0)]
         public float GraphicsRezoScalePrev;
         [FieldOffset(0x70C + 4 * 1)]

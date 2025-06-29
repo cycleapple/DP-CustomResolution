@@ -159,6 +159,11 @@ Click here to disable it."))
 
             ImGui.EndCombo();
         }
+
+        if (Service.DebugConfig.IsDebug)
+        {
+            ImGui.Text(Service.GameSize.DebugInfo);
+        }
     }
 
 
