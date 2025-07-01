@@ -1,4 +1,5 @@
 ﻿using CustomResolution.Hooks;
+using Dalamud.Game;
 using Dalamud.Game.Text;
 using Dalamud.IoC;
 using Dalamud.Plugin;
@@ -37,6 +38,9 @@ public sealed class Service
 
     [PluginService]
     public static IGameInteropProvider GameInteropProvider { get; private set; } = null!;
+
+    [PluginService]
+    public static ISigScanner SigScanner { get; private set; } = null!;
 
     [PluginService]
     public static IPluginLog PluginLog { get; private set; } = null!;

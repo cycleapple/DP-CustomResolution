@@ -16,6 +16,7 @@ public class ConfigWindow : Window, IDisposable
 
     private readonly int[] _displayCurrentWH = new int[2];
     private readonly int[] _displayCurrentWindowWH = new int[2];
+    private readonly int[] _displayCurrentGameWH = new int[2];
 
     private ConfigurationV1 _;
 
@@ -49,18 +50,18 @@ public class ConfigWindow : Window, IDisposable
         _displayCurrentWH[1] = (int) Service.DisplaySize.CurrentHeight;
         _displayCurrentWindowWH[0] = (int) Service.DisplaySize.CurrentWindowWidth;
         _displayCurrentWindowWH[1] = (int) Service.DisplaySize.CurrentWindowHeight;
+        _displayCurrentGameWH[0] = (int) Service.GameSize.CurrentWidth;
+        _displayCurrentGameWH[1] = (int) Service.GameSize.CurrentHeight;
 
-        ImGui.BeginDisabled();
-        ImGui.InputInt2("Current window size", ref _displayCurrentWindowWH[0]);
-        ImGui.InputInt2("Current display size", ref _displayCurrentWH[0]);
-        ImGui.EndDisabled();
+        using (ImRaii.Disabled())
+        {
+            ImGui.InputInt2("Window size", ref _displayCurrentWindowWH[0]);
+        }
 
         using (var imTabBar = ImRaii.TabBar("MalfunctionMainTabs"))
         {
             DrawDisplayTab();
-
             DrawGameTab();
-
             DrawCommonTab();
         }
 
@@ -97,7 +98,31 @@ Changed via /cres");
             return;
         }
 
-        DrawSizeTabContents(ref _.Display, "Display");
+        using (ImRaii.Disabled())
+        {
+            ImGui.InputInt2("Current size", ref _displayCurrentWH[0]);
+        }
+
+        DrawSizeTabShared(ref _.Display, "Display");
+
+        ImGui.Checkbox("Use scale", ref _.Display.IsScale);
+
+        if (_.Display.IsScale)
+        {
+            ImGui.InputFloat("Scale", ref _.Display.Scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.None);
+        }
+        else
+        {
+            unsafe
+            {
+                ImGui.InputInt2("Size in pixels", ref _.Display.WH[0]);
+            }
+        }
+
+        if (Service.DebugConfig.IsDebug)
+        {
+            ImGui.Text(Service.DisplaySize.DebugInfo);
+        }
     }
 
     private void DrawGameTab()
@@ -124,23 +149,23 @@ Changed via /gres");
             return;
         }
 
-#if false
-        if (Service.GameSize.CurrentDynRezoConfig)
+        using (ImRaii.Disabled())
         {
-            using (ImRaii.PushColor(ImGuiCol.Border, 0xff00ffff))
-            {
-                if (ImGui.Button(@"This might not work properly while in-game dynamic resolution is enabled!
-Click here to disable it."))
-                {
-                    Service.GameSize.ForceDynRezoConfig(false);
-                }
-
-                ImGui.Dummy(new Vector2(0, ImGui.GetTextLineHeight() * 0.1f));
-            }
+            ImGui.InputInt2("Current size", ref _displayCurrentGameWH[0]);
         }
-#endif
 
-        DrawSizeTabContents(ref _.Game, "Game", scaleOnly: true);
+        DrawSizeTabShared(ref _.Game, "Game", scaleOnly: true);
+
+        using (_.Game.Scale > 2f ? ImRaii.PushColor(ImGuiCol.Border, 0xff00ffff) : null)
+        {
+            ImGui.InputFloat("Scale", ref _.Game.Scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.None);
+        }
+
+        if (_.Game.Scale > 2f && ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(@"Scaling larger than 2x currently doesn't improve antialiasing!
+This is still being worked on before the v1.0 release.");
+        }
 
         if (ImGui.BeginCombo("Graphics Upscaling", _.ResolutionScalingMode.ToHumanNameString()))
         {
@@ -167,7 +192,7 @@ Click here to disable it."))
     }
 
 
-    private void DrawSizeTabContents(ref ConfigurationV1.SizeConfig size, string name, bool scaleOnly = false)
+    private void DrawSizeTabShared(ref ConfigurationV1.SizeConfig size, string name, bool scaleOnly = false)
     {
         ImGui.Checkbox("Enabled", ref size.IsEnabled);
 
@@ -216,24 +241,6 @@ Click here to disable it."))
 
         ImGui.SameLine();
         ImGui.Text("Hotkey");
-
-
-        if (!scaleOnly)
-        {
-            ImGui.Checkbox("Use scale", ref size.IsScale);
-        }
-
-        if (size.IsScale || scaleOnly)
-        {
-            ImGui.InputFloat("Scale", ref size.Scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.EnterReturnsTrue);
-        }
-        else
-        {
-            unsafe
-            {
-                ImGui.InputInt2("Size in pixels", ref size.WH[0]);
-            }
-        }
     }
 
     private void DrawCommonTab()

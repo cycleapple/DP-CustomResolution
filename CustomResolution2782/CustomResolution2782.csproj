@@ -63,6 +63,17 @@
       <HintPath>$(DalamudLibPath)Serilog.dll</HintPath>
       <Private>false</Private>
     </Reference>
+    <Reference Include="SharpDX">
+      <HintPath>$(DalamudLibPath)SharpDX.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="SharpDX.Mathematics">
+      <HintPath>$(DalamudLibPath)SharpDX.Mathematics.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <PackageReference Include="SharpDX.D3DCompiler" Version="4.2.0" />
+    <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
+    <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
   </ItemGroup>
 
 </Project>

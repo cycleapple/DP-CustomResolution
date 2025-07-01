@@ -106,7 +106,7 @@ public sealed unsafe class WndProcHook : IDisposable
 
     private void InvokePre(WndProcEventArgs args)
     {
-        if (Service.Plugin is not { } plugin)
+        if (Service.Plugin.Unloading)
         {
             return;
         }
@@ -185,7 +185,7 @@ public sealed unsafe class WndProcHook : IDisposable
 
     private void InvokePost(WndProcEventArgs args)
     {
-        if (Service.Plugin is not { } plugin)
+        if (Service.Plugin.Unloading)
         {
             return;
         }

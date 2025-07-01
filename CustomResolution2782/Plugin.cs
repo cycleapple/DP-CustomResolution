@@ -84,8 +84,6 @@ public sealed unsafe class Plugin : IDalamudPlugin
         Service.WndProcHook.Dispose();
 
         Service.PluginUI.Dispose();
-
-        Service.Plugin = null!;
     }
 
     private void OnFrameworkUpdateForSize(ref ConfigurationV1.SizeConfig size)

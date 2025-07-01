@@ -7,11 +7,13 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.Interop;
+using FloppyUtils;
 using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.InteropServices;
+using System.Text;
 using TerraFX.Interop.Windows;
 using static TerraFX.Interop.Windows.Windows;
 
@@ -19,6 +21,8 @@ namespace CustomResolution;
 
 public unsafe class DisplaySizeState : IDisposable
 {
+    private StringBuilder _dbg = new();
+    private bool _dbgLog = false;
     private bool _wasEnabled = false;
     private HWND _currentHwnd;
     private bool _currentHwndMismatch = false;
@@ -35,6 +39,8 @@ public unsafe class DisplaySizeState : IDisposable
     public uint CurrentWindowHeight { get; private set; }
 
     public bool CurrentBorderlessFullscreen { get; private set; }
+
+    public string DebugInfo => _dbg.ToString();
 
     public void Dispose()
     {
@@ -117,6 +123,9 @@ public unsafe class DisplaySizeState : IDisposable
 
     public void Update()
     {
+        _dbg.Clear();
+        _dbgLog = false;
+
         bool unloading = Service.Plugin.Unloading;
 
         ref var cfg = ref Service.Config._.Display;
@@ -134,8 +143,8 @@ public unsafe class DisplaySizeState : IDisposable
             if (!_currentHwndMismatch)
             {
                 _currentHwndMismatch = true;
-                Service.PluginLog.Error($"HWND MISMATCH between GameWindow and Device: 0x{(long) (IntPtr) (_currentHwnd):X16} vs 0x{(long) dev->hWnd:X16}");
-                Service.PluginLog.Info($"dev is at: 0x{(long) (IntPtr) dev:X16}");
+                Service.PluginLog.Error($"HWND MISMATCH between GameWindow and Device: 0x{(long) (nint) _currentHwnd:X16} vs 0x{(long) (nint) dev->hWnd:X16}");
+                Service.PluginLog.Info($"dev is at: 0x{(long) (nint) dev:X16}");
                 CheckHWND("GameWindow", _currentHwnd);
                 CheckHWND("Device", (HWND) dev->hWnd);
             }
@@ -242,8 +251,8 @@ public unsafe class DisplaySizeState : IDisposable
             _wasEnabled = enabled;
         }
 
-        //Service.PluginLog.Debug($"NewWidth 0x{(long) (IntPtr) (&dev->NewWidth):X16}");
-        //Service.PluginLog.Debug($"GameWindow->Width 0x{(long) (IntPtr) (&win->WindowWidth):X16}");
+        //Service.PluginLog.Debug($"NewWidth 0x{(long) (nint) (&dev->NewWidth):X16}");
+        //Service.PluginLog.Debug($"GameWindow->Width 0x{(long) (nint) (&win->WindowWidth):X16}");
 
         //Service.PluginLog.Info($"Game window at {win->WindowWidth} x {win->WindowHeight}");
 
@@ -264,6 +273,20 @@ public unsafe class DisplaySizeState : IDisposable
         CurrentHeight = height;
         CurrentWindowWidth = (uint) rectWidth;
         CurrentWindowHeight = (uint) rectHeight;
+
+        if (Service.DebugConfig.IsDebug)
+        {
+            _dbg.AppendLine(@$"RESIZE {dev->RequestResolutionChange} {dev->RequestResolutionChangeUnk1} {dev->RequestResolutionChangeUnk2} {dev->RequestResolutionChangeUnk3}");
+            _dbgLog |= dev->RequestResolutionChange != 0;
+            _dbgLog |= dev->RequestResolutionChangeUnk1 != 0;
+            _dbgLog |= dev->RequestResolutionChangeUnk2 != 0;
+            _dbgLog |= dev->RequestResolutionChangeUnk3 != 0;
+        }
+
+        if (_dbgLog)
+        {
+            Service.PluginLog.Debug(_dbg.ToString());
+        }
     }
 
     private void SetDXVKDWMHack(DXVKDWMHackMode mode)
@@ -281,19 +304,19 @@ public unsafe class DisplaySizeState : IDisposable
 
         var fullscreen = (style & WS.WS_SYSMENU) == 0;
 
+        _dbg.Clear();
         if (Service.DebugConfig.IsDebug)
         {
-            Service.PluginLog.Info("--------");
-            Service.PluginLog.Info($"STYLE: 0x{style:X8}");
-            Service.PluginLog.Info($"EXSTYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE):X8}");
+            _dbg.AppendLine($"STYLE: 0x{style:X8}");
+            _dbg.AppendLine($"EXSTYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE):X8}");
 
             Span<ushort> name = stackalloc ushort[256];
             GetClassName(_currentHwnd, name.GetPointer(0), name.Length);
             WNDCLASSEXW wce;
             GetClassInfoEx(GetModuleHandle(null), name.GetPointer(0), &wce);
 
-            Service.PluginLog.Info($"CLASS: {new string((char*) name.GetPointer(0))}");
-            Service.PluginLog.Info($"CLASS.style: 0x{wce.style:X8}");
+            _dbg.AppendLine($"CLASS: {new string((char*) name.GetPointer(0))}");
+            _dbg.AppendLine($"CLASS.style: 0x{wce.style:X8}");
         }
 
         if (fullscreen)
@@ -321,15 +344,16 @@ public unsafe class DisplaySizeState : IDisposable
 
         if (Service.DebugConfig.IsDebug)
         {
-            Service.PluginLog.Info($"NEWSTYLE: 0x{style:X8}");
-            Service.PluginLog.Info($"NEWEXSTYLE: 0x{exstyle:X8}");
+            _dbg.AppendLine($"NEWSTYLE: 0x{style:X8}");
+            _dbg.AppendLine($"NEWEXSTYLE: 0x{exstyle:X8}");
         }
 
         if (style != styleOrig || exstyle != exstyleOrig || _currentDXVKDWMHackMode != mode)
         {
             if (Service.DebugConfig.IsDebug)
             {
-                Service.PluginLog.Info("UPDATE");
+                _dbg.AppendLine("UPDATE");
+                _dbgLog = true;
             }
 
             SetWindowLong(_currentHwnd, GWL.GWL_STYLE, (int) style);
@@ -340,7 +364,7 @@ public unsafe class DisplaySizeState : IDisposable
         }
         else if (Service.DebugConfig.IsDebug)
         {
-            Service.PluginLog.Info("SAME");
+            _dbg.AppendLine("SAME");
         }
 
         _currentDXVKDWMHackMode = mode;
@@ -353,37 +377,6 @@ public unsafe class DisplaySizeState : IDisposable
         {
             Service.PluginLog.Info($"{from} is sus: {Marshal.GetLastPInvokeErrorMessage()}");
         }
-    }
-
-    [StructLayout(LayoutKind.Explicit)]
-    private struct DeviceEx
-    {
-        [FieldOffset(0)]
-        public Device _;
-
-        public ref byte RequestResolutionChange => ref _.RequestResolutionChange;
-
-        public ref uint Width => ref _.Width;
-
-        public ref uint Height => ref _.Height;
-
-#if CRES_CLEAN || true
-        public ref void* hWnd => ref _.hWnd;
-
-        public ref uint NewWidth => ref _.NewWidth;
-
-        public ref uint NewHeight => ref _.NewHeight;
-#else
-        // 7.2 adds 1B8 before hWnd (previously 820, now 9D8)
-        [FieldOffset(0x9D8)]
-        public unsafe void* hWnd;
-
-        [FieldOffset(0x9D8 + 0x10)]
-        public uint NewWidth;
-
-        [FieldOffset(0x9D8 + 0x14)]
-        public uint NewHeight;
-#endif
     }
 }
 
@@ -404,4 +397,39 @@ public enum ForceSizeMode
     /// This is the same method that other plugins such as SimpleTweaks or XIVWindowResizer use.
     /// </summary>
     LegacyRequestResolutionChange = 1
+}
+
+[StructLayout(LayoutKind.Explicit)]
+public unsafe struct DeviceEx
+{
+    [FieldOffset(0)]
+    public Device _;
+
+    public ref byte RequestResolutionChange => ref _.RequestResolutionChange;
+
+    public ref byte RequestResolutionChangeUnk1 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x1).Ref;
+    public ref byte RequestResolutionChangeUnk2 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x2).Ref;
+    public ref byte RequestResolutionChangeUnk3 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x3).Ref;
+
+    public ref uint Width => ref _.Width;
+
+    public ref uint Height => ref _.Height;
+
+#if CRES_CLEAN || true
+    public ref void* hWnd => ref _.hWnd;
+
+    public ref uint NewWidth => ref _.NewWidth;
+
+    public ref uint NewHeight => ref _.NewHeight;
+#else
+    // 7.2 adds 1B8 before hWnd (previously 820, now 9D8)
+    [FieldOffset(0x9D8)]
+    public unsafe void* hWnd;
+
+    [FieldOffset(0x9D8 + 0x10)]
+    public uint NewWidth;
+
+    [FieldOffset(0x9D8 + 0x14)]
+    public uint NewHeight;
+#endif
 }
