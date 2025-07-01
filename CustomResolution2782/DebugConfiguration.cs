@@ -1,5 +1,4 @@
-﻿using System;
-namespace CustomResolution;
+﻿namespace CustomResolution;
 
 /// <summary>
 /// Flags for internal testing.

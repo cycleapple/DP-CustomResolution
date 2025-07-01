@@ -1,7 +1,4 @@
-﻿using Dalamud.Configuration;
-using Dalamud.Game.ClientState.Keys;
-using Dalamud.Plugin;
-using System;
+﻿using Dalamud.Game.ClientState.Keys;
 using System.Collections.Generic;
 using System.Reflection;
 

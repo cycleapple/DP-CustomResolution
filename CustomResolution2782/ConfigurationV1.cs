@@ -1,6 +1,4 @@
-﻿using Dalamud.Configuration;
-using Dalamud.Game.ClientState.Keys;
-using Dalamud.Plugin;
+﻿using Dalamud.Game.ClientState.Keys;
 using System;
 
 namespace CustomResolution;

@@ -5,8 +5,6 @@ using ImGuiNET;
 using System;
 using System.Linq;
 using System.Numerics;
-using System.Xml.Linq;
-using TerraFX.Interop.Windows;
 
 namespace CustomResolution.Windows;
 
