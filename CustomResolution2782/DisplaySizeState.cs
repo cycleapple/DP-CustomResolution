@@ -12,6 +12,7 @@ using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Runtime.InteropServices;
 using System.Text;
 using TerraFX.Interop.Windows;
@@ -411,25 +412,31 @@ public unsafe struct DeviceEx
     public ref byte RequestResolutionChangeUnk2 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x2).Ref;
     public ref byte RequestResolutionChangeUnk3 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x3).Ref;
 
+    public ref uint RequestRender => ref RefPtr.For(ref _.Width).Offs<uint>(-0x4).Ref;
+
     public ref uint Width => ref _.Width;
 
     public ref uint Height => ref _.Height;
 
-#if CRES_CLEAN || true
     public ref void* hWnd => ref _.hWnd;
 
     public ref uint NewWidth => ref _.NewWidth;
 
     public ref uint NewHeight => ref _.NewHeight;
-#else
-    // 7.2 adds 1B8 before hWnd (previously 820, now 9D8)
-    [FieldOffset(0x9D8)]
-    public unsafe void* hWnd;
 
-    [FieldOffset(0x9D8 + 0x10)]
-    public uint NewWidth;
+    // C# doesn't let us use ptr types as generic arguments, oh well.
+    public readonly ImmediateContextEx* ImmediateContext => (ImmediateContextEx*) _.ImmediateContext;
+}
 
-    [FieldOffset(0x9D8 + 0x14)]
-    public uint NewHeight;
-#endif
+
+// ImmediateContextEx in FFXIVClientStructs is a bare minimum.
+// https://github.com/aers/FFXIVClientStructs/blob/ef5e9a5997671fb2c9a72cb9d57d841855f62085/FFXIVClientStructs/FFXIV/Client/Graphics/Kernel/ImmediateContext.cs
+[StructLayout(LayoutKind.Explicit)]
+public struct ImmediateContextEx
+{
+    [FieldOffset(0)]
+    public ImmediateContext _;
+
+    [FieldOffset(0x18)]
+    public nint IfNonZeroSkipPostTickProcess;
 }

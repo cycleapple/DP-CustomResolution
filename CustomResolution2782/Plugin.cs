@@ -32,11 +32,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
         Service.Plugin = this;
 
         Service.DebugConfig = new();
-        Service.DisplaySize = new();
-        Service.GameSize = new();
 
         Service.Config = Service.PluginInterface.GetPluginConfig() as Configuration ?? new();
         Service.Config.Initialize(Service.PluginInterface);
+
+        Service.DisplaySize = new();
+        Service.GameSize = new();
 
         Service.PluginUI = new();
 
