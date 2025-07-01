@@ -18,14 +18,14 @@ to handle it correctly - things are already shifting around when just resizing t
 Good news: You don't need to! XIV itself has got a "High Resolution UI Settings" scaling option in the system
 configuration window, in the very first category ("Display Settings"), right under the resolution options.
 
-Bad news: We're currently limited to the very options that XIV gives us. Perhaps a deeper dive into how the game
-renders the HUD and decoupling that from the actual game render resolution could help, but it's on the same
-scale of difficulty as fixing multi-monitor windows.
+Even better news: The gameplay tab lets you scale the gameplay independently from the HUD, allowing you to keep
+everything where it was while still allowing you to switch between game scaling modes on the fly. The main drawback
+is that this does NOT affect the screenshot resolution.
 </details>
 
 <details><summary>I'm scaling by 3x or higher, but I'm still getting jagged edges!</summary>
 The plugin currently only gives FFXIV a fake resolution to work with internally, but it doesn't ensure that the
-extra pixels land on your screen - those will still be used for in-game or ReShade screenshots though.
+extra pixels land on your screen. When scaling the display resolution, those will still be used for in-game or ReShade screenshots though.
 
 Windows should perform basic filtering with 2x scaling (it might not work on some graphics cards?), and I haven't
 heard back from anyone using this on Linux yet. But an universal fix for this is possible - it just requires more
