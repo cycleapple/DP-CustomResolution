@@ -277,13 +277,6 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
     private void ICDX11ProcessCommandsDetour(ImmediateContext* ctx, RenderCommandBufferGroup* cmds, uint count)
     {
-        ref var cfg = ref Service.Config._.Game;
-        if (Service.Plugin.Unloading || !cfg.IsEnabled)
-        {
-            _icdx11ProcessCommandsHook.OriginalDisposeSafe(ctx, cmds, count);
-            return;
-        }
-
         lock (_renderLock)
         {
             _icdx11ProcessCommandsHook.OriginalDisposeSafe(ctx, cmds, count);
