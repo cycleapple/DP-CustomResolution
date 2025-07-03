@@ -397,6 +397,11 @@ public unsafe struct DeviceEx
     [FieldOffset(0)]
     public Device _;
 
+    [FieldOffset(0x40)]
+    public DeviceCallbacks* RenderTargetManagerResizeDestroyCallback;
+    [FieldOffset(0x48)]
+    public DeviceCallbacks* RenderTargetManagerResizeRegenCallback;
+
     public ref byte RequestResolutionChange => ref _.RequestResolutionChange;
 
     public ref byte RequestResolutionChangeUnk1 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x1).Ref;
@@ -419,7 +424,6 @@ public unsafe struct DeviceEx
     public readonly ImmediateContextEx* ImmediateContext => (ImmediateContextEx*) _.ImmediateContext;
 }
 
-
 // ImmediateContextEx in FFXIVClientStructs is a bare minimum.
 // https://github.com/aers/FFXIVClientStructs/blob/ef5e9a5997671fb2c9a72cb9d57d841855f62085/FFXIVClientStructs/FFXIV/Client/Graphics/Kernel/ImmediateContext.cs
 [StructLayout(LayoutKind.Explicit)]
@@ -431,3 +435,31 @@ public struct ImmediateContextEx
     [FieldOffset(0x18)]
     public nint IfNonZeroSkipPostTickProcess;
 }
+
+
+[StructLayout(LayoutKind.Explicit)]
+public unsafe struct DeviceCallbacks
+{
+    [FieldOffset(0x8)]
+    public CRITICAL_SECTION* Lock;
+
+    [FieldOffset(0x30)]
+    public DeviceCallbackSlot* Slots;
+
+    [FieldOffset(0x38)]
+    public uint MaxCount;
+
+    [FieldOffset(0x3c)]
+    public uint Count;
+}
+
+[StructLayout(LayoutKind.Explicit)]
+public unsafe struct DeviceCallbackSlot
+{
+    [FieldOffset(0x0)]
+    public nint Function;
+
+    [FieldOffset(0x8)]
+    public nint Context;
+}
+

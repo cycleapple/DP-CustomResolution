@@ -6,6 +6,7 @@ using FloppyUtils;
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using TerraFX.Interop.Windows;
 
 namespace CustomResolution;
 
@@ -16,6 +17,7 @@ public unsafe class GameSizeState : IDisposable
     private Hook<RTMDestroyAfterResize> _rtmDestroyAfterResizeHook;
     private Hook<RTMRegenAfterResize> _rtmRegenAfterResizeHook;
     private Hook<ICDX11ProcessCommands> _icdx11ProcessCommandsHook;
+    private Hook<DDX11PostTick> _ddx11PostTickHook;
 
     private bool _wasEnabled = false;
     private object _renderLock = new();
@@ -25,10 +27,7 @@ public unsafe class GameSizeState : IDisposable
     public GameSizeState()
     {
         /* Writes DynamicResolutionTargetHeight to size[1] near the end,
-         * but only if in (gpose || main menu), only scale < 1??
-         *
-         * RVAs:
-         * 7.2: 140470150
+         * but if in (gpose || main menu), only scale < 1??
          */
         _rtmApplyScalingHook = Service.GameInteropProvider.HookFromAddress<RTMApplyScaling>(
             Service.SigScanner.ScanText("48 89 5C 24 18 55 56 57 41 56 41 57 48 83 EC 20 8B 42 04 0F 57 C0 48 8B"),
@@ -36,9 +35,13 @@ public unsafe class GameSizeState : IDisposable
         );
         _rtmApplyScalingHook.Enable();
 
+        var dev = (DeviceEx*) Device.Instance();
+
         /* Device.RequestResolutionChange and other triggers run some callbacks, namely
          * (at the time of 7.2) 0x40 for RTM destruction and 0x48 for RTM reconstruction,
          * registered in RTM init and run in PostTick.
+         *
+         * RenderTargetManager.Initialize calls subroutines to install those callbacks.
          *
          * We don't care about destruction as much because its behavior is unchanged, but
          * we do want to call it instead of triggering a slow full game resize,
@@ -49,12 +52,12 @@ public unsafe class GameSizeState : IDisposable
          * and for being in the stack trace when dxgi updates the RT ptrs.
          */
         _rtmDestroyAfterResizeHook = Service.GameInteropProvider.HookFromAddress<RTMDestroyAfterResize>(
-            Service.SigScanner.ScanText("40 53 48 83 EC 20 48 8B 05 ?? ?? ?? ?? 48 8B D9 80 78 7A 00 ?? ?? ?? ?? ?? ?? 48 89 6C 24"),
+            dev->RenderTargetManagerResizeDestroyCallback->Slots[0].Function,
             RTMDestroyAfterResizeDetour
         );
         _rtmDestroyAfterResizeHook.Enable();
         _rtmRegenAfterResizeHook = Service.GameInteropProvider.HookFromAddress<RTMRegenAfterResize>(
-            Service.SigScanner.ScanText("40 55 57 41 55 48 8D 6C 24 B9 48 81 EC A0 00 00 00 48 8B 05 50 10 2C 02 48 33 C4 48 89 45 27 4C"),
+            dev->RenderTargetManagerResizeRegenCallback->Slots[0].Function,
             RTMRegenAfterResizeDetour
         );
         _rtmRegenAfterResizeHook.Enable();
@@ -70,6 +73,12 @@ public unsafe class GameSizeState : IDisposable
             ICDX11ProcessCommandsDetour
         );
         _icdx11ProcessCommandsHook.Enable();
+
+        _ddx11PostTickHook = Service.GameInteropProvider.HookFromAddress<DDX11PostTick>(
+            Service.SigScanner.ScanText("48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 B8 30 43 00 00 ?? ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? 00 00 8B 15"),
+            DDX11PostTickDetour
+        );
+        _ddx11PostTickHook.Enable();
     }
 
     public bool ConfigDynRezo { get; private set; }
@@ -85,10 +94,10 @@ public unsafe class GameSizeState : IDisposable
     private delegate void RTMApplyScaling(RenderTargetManagerEx* rtm, uint* size, byte unk1);
 
     // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void RTMDestroyAfterResize(RenderTargetManagerEx* rtm);
+    private delegate byte RTMDestroyAfterResize();
 
     // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void RTMRegenAfterResize(RenderTargetManagerEx* rtm);
+    private delegate void RTMRegenAfterResize();
 
     // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
     private delegate void ICDX11ProcessCommands(ImmediateContext* ctx, RenderCommandBufferGroup* cmds, uint count);
@@ -102,6 +111,7 @@ public unsafe class GameSizeState : IDisposable
         _rtmDestroyAfterResizeHook.Dispose();
         _rtmRegenAfterResizeHook.Dispose();
         _icdx11ProcessCommandsHook.Dispose();
+        _ddx11PostTickHook.Dispose();
         Service.Framework.RunOnFrameworkThread(Update);
     }
 
@@ -125,7 +135,7 @@ public unsafe class GameSizeState : IDisposable
             _dbg.Append(@$"RTMApplyScaling 0x{(_rtmApplyScalingHook.IsDisposed ? null : _rtmApplyScalingHook.Address):X16}
 RTMRegenAfterResize 0x{(_rtmRegenAfterResizeHook.IsDisposed ? null : _rtmRegenAfterResizeHook.Address):X16}
 ICDX11ProcessCommands 0x{(_icdx11ProcessCommandsHook.IsDisposed ? null : _icdx11ProcessCommandsHook.Address):X16}
-DR !{gfx->DynamicRezoEnable} ?{gfx->DynamicRezoEnableBeyond1} _{gfx->DynamicRezoEnableCutScene} ?{gfx->DynamicRezoEnableUnkx47} ?{gfx->DynamicRezoEnableUnkx48}
+DR !{gfx->DynamicRezoEnable} +{gfx->DynamicRezoEnableBeyond1} _{gfx->DynamicRezoEnableCutScene} ?{gfx->DynamicRezoEnableUnkx47} ?{gfx->DynamicRezoEnableUnkx48}
 GR x{gfx->GraphicsRezoScale} ?{gfx->GraphicsRezoUnk1} _{gfx->GraphicsRezoUpscaleType} ?{gfx->GraphicsRezoUnk2}
 DEV 0x{(long) (nint) dev:X16}
 GFX 0x{(long) (nint) gfx:X16}
@@ -170,8 +180,8 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
                 {
                     Service.PluginLog.Debug($"Regenerating dirty RTM - locking ImmediateContextDX11.ProcessCommands");
                     dev->RequestResolutionChange = 1;
-                    RTMDestroyAfterResizeDetour(rtm);
-                    RTMRegenAfterResizeDetour(rtm);
+                    RTMDestroyAfterResizeDetour();
+                    RTMRegenAfterResizeDetour();
                     dev->RequestResolutionChange = 0;
                 }
             }
@@ -187,18 +197,24 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         {
             // Can also be forced via dev->RequestResolutionChange, but while cleaner on paper, it trips up ReShade.
             Service.PluginLog.Debug("_forceUpdateRTM -> 1");
-            _forceUpdateRTM = ForceUpdateRTMState._1_FakeHalf;
+            _forceUpdateRTM = ForceUpdateRTMState._1_FakeInv;
         }
 
         switch (enabled ? _forceUpdateRTM : ForceUpdateRTMState._0_Idle)
         {
             default:
+                if (_forceUpdateRTM < 0)
+                {
+                    _forceUpdateRTM++;
+                }
+                break;
+
             case ForceUpdateRTMState._0_Idle:
                 break;
 
-            case ForceUpdateRTMState._1_FakeHalf:
+            case ForceUpdateRTMState._1_FakeInv:
                 gfx->DynamicRezoEnable = 0;
-                gfx->GraphicsRezoScale = 0.5f;
+                gfx->GraphicsRezoScale = MathF.Min(1f, 1f / scale);
                 Service.PluginLog.Debug("_forceUpdateRTM -> 2");
                 _forceUpdateRTM = ForceUpdateRTMState._2_ToScale;
                 break;
@@ -236,30 +252,33 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         gfx->DynamicRezoEnableBeyond1 = _DynamicRezoEnableBeyond1;
     }
 
-    private void RTMDestroyAfterResizeDetour(RenderTargetManagerEx* rtm)
+    private byte RTMDestroyAfterResizeDetour()
     {
         ref var cfg = ref Service.Config._.Game;
         if (Service.Plugin.Unloading || !cfg.IsEnabled)
         {
-            _rtmDestroyAfterResizeHook.OriginalDisposeSafe(rtm);
-            return;
+            return _rtmDestroyAfterResizeHook.OriginalDisposeSafe();
         }
 
+        var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
+
         Service.PluginLog.Debug($"Destroying RTM resources");
-        _rtmDestroyAfterResizeHook.OriginalDisposeSafe(rtm);
+        byte rv = _rtmDestroyAfterResizeHook.OriginalDisposeSafe();
         Service.PluginLog.Debug($"After: 0x{(long) (nint) rtm->_.Unk20[0].Value->D3D11Texture2D:X16}");
+        return rv;
     }
 
-    private void RTMRegenAfterResizeDetour(RenderTargetManagerEx* rtm)
+    private void RTMRegenAfterResizeDetour()
     {
         ref var cfg = ref Service.Config._.Game;
         if (Service.Plugin.Unloading || !cfg.IsEnabled)
         {
-            _rtmRegenAfterResizeHook.OriginalDisposeSafe(rtm);
+            _rtmRegenAfterResizeHook.OriginalDisposeSafe();
             return;
         }
 
         var dev = (DeviceEx*) Device.Instance();
+        var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
 
         var _Width = dev->Width;
         var _Height = dev->Height;
@@ -268,7 +287,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         GetScaledWidthHeight(_Width, _Height, scale, out dev->Width, out dev->Height);
 
         Service.PluginLog.Debug($"Regenerating RTM resources: {dev->Width} x {dev->Height}");
-        _rtmRegenAfterResizeHook.OriginalDisposeSafe(rtm);
+        _rtmRegenAfterResizeHook.OriginalDisposeSafe();
         Service.PluginLog.Debug($"After: 0x{(long) (nint) rtm->_.Unk20[0].Value->D3D11Texture2D:X16}");
 
         dev->Width = _Width;
@@ -283,6 +302,11 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         }
     }
 
+    private void DDX11PostTickDetour(DeviceEx* dev)
+    {
+        _ddx11PostTickHook.OriginalDisposeSafe(dev);
+    }
+
     private void GetScaledWidthHeight(uint width, uint height, float scale, out uint widthS, out uint heightS)
     {
         heightS = (uint) MathF.Round(height * scale);
@@ -292,7 +316,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
     private enum ForceUpdateRTMState
     {
         _0_Idle,
-        _1_FakeHalf,
+        _1_FakeInv,
         _2_ToScale
     }
 }
