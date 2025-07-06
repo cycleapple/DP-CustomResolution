@@ -257,7 +257,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         CurrentHeight = rtm->Resolution_Height;
     }
 
-    private void GetScaledWidthHeight(uint width, uint height, float scale, out uint widthS, out uint heightS)
+    private static void GetScaledWidthHeight(uint width, uint height, float scale, out uint widthS, out uint heightS)
     {
         heightS = (uint) MathF.Round(height * scale);
         widthS = (width * heightS) / height;
@@ -311,18 +311,10 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         var dev = (DeviceEx*) Device.Instance();
         var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
 
-        var _Width = dev->Width;
-        var _Height = dev->Height;
-
-        var scale = MathF.Max(1f, cfg.Scale);
-        GetScaledWidthHeight(_Width, _Height, scale, out dev->Width, out dev->Height);
-
+        using var scale = new ScaleState();
         Service.PluginLog.Debug($"Regenerating RTM resources: {dev->Width} x {dev->Height}");
         _rtmRegenAfterResizeHook.OriginalDisposeSafe();
         Service.PluginLog.Debug($"After: 0x{(long) (nint) rtm->_.Unk20[0].Value->D3D11Texture2D:X16}");
-
-        dev->Width = _Width;
-        dev->Height = _Height;
     }
 
     private void ICDX11ProcessCommandsDetour(ImmediateContext* ctx, RenderCommandBufferGroup* cmds, uint count)
@@ -349,18 +341,8 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
         lock (_renderLock)
         {
-            var dev = (DeviceEx*) Device.Instance();
-
-            var _Width = dev->Width;
-            var _Height = dev->Height;
-
-            var scale = MathF.Max(1f, cfg.Scale);
-            GetScaledWidthHeight(_Width, _Height, scale, out dev->Width, out dev->Height);
-
+            using var scale = new ScaleState();
             _taskRenderGraphicsRenderHook.OriginalDisposeSafe();
-
-            dev->Width = _Width;
-            dev->Height = _Height;
         }
     }
 
@@ -369,6 +351,29 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         _0_Idle,
         _1_FakeInv,
         _2_ToScale
+    }
+
+    private struct ScaleState : IDisposable
+    {
+        public uint Width;
+        public uint Height;
+
+        public ScaleState()
+        {
+            var dev = (DeviceEx*) Device.Instance();
+            Width = dev->Width;
+            Height = dev->Height;
+
+            var scale = MathF.Max(1f, Service.Config._.Game.Scale);
+            GetScaledWidthHeight(Width, Height, scale, out dev->Width, out dev->Height);
+        }
+
+        public void Dispose()
+        {
+            var dev = (DeviceEx*) Device.Instance();
+            dev->Width = Width;
+            dev->Height = Height;
+        }
     }
 }
 
