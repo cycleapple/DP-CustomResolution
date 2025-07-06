@@ -2,6 +2,7 @@
 using Dalamud.Hooking;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FloppyUtils;
 using System;
 using System.Runtime.InteropServices;
@@ -18,6 +19,7 @@ public unsafe class GameSizeState : IDisposable
     private Hook<RTMRegenAfterResize> _rtmRegenAfterResizeHook;
     private Hook<ICDX11ProcessCommands> _icdx11ProcessCommandsHook;
     private Hook<DDX11PostTick> _ddx11PostTickHook;
+    private Hook<TaskRenderGraphicsRender> _taskRenderGraphicsRenderHook;
 
     private bool _wasEnabled = false;
     private object _renderLock = new();
@@ -79,6 +81,25 @@ public unsafe class GameSizeState : IDisposable
             DDX11PostTickDetour
         );
         _ddx11PostTickHook.Enable();
+
+        /* TaskRenderGraphicsRender has got a prio of 0x1F and seems to be the only task with that prio.
+         * Hooking this is relevant for post-processing, and can be validated easily by enabling TSCMAA at >1x scale.
+         */
+        Task* taskRenderGraphicsRenderTask = null;
+        for (var task = &TaskManager.Instance()->TaskList[0x1F].Task; task != null; task = task->Next)
+        {
+            if (task->Runner != null)
+            {
+                taskRenderGraphicsRenderTask = task;
+                break;
+            }
+        }
+        Service.PluginLog.Debug($"TaskRenderGraphicsRender Task @ 0x{(long) taskRenderGraphicsRenderTask:X16} -> 0x{(long) (nint) taskRenderGraphicsRenderTask->Func:X16}");
+        _taskRenderGraphicsRenderHook = Service.GameInteropProvider.HookFromAddress<TaskRenderGraphicsRender>(
+            taskRenderGraphicsRenderTask->Func,
+            TaskRenderGraphicsRenderDetour
+        );
+        _taskRenderGraphicsRenderHook.Enable();
     }
 
     public bool ConfigDynRezo { get; private set; }
@@ -105,6 +126,9 @@ public unsafe class GameSizeState : IDisposable
     // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
     private delegate void DDX11PostTick(DeviceEx* dev);
 
+    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
+    private delegate void TaskRenderGraphicsRender();
+
     public void Dispose()
     {
         _rtmApplyScalingHook.Dispose();
@@ -112,6 +136,7 @@ public unsafe class GameSizeState : IDisposable
         _rtmRegenAfterResizeHook.Dispose();
         _icdx11ProcessCommandsHook.Dispose();
         _ddx11PostTickHook.Dispose();
+        _taskRenderGraphicsRenderHook.Dispose();
         Service.Framework.RunOnFrameworkThread(Update);
     }
 
@@ -232,6 +257,12 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         CurrentHeight = rtm->Resolution_Height;
     }
 
+    private void GetScaledWidthHeight(uint width, uint height, float scale, out uint widthS, out uint heightS)
+    {
+        heightS = (uint) MathF.Round(height * scale);
+        widthS = (width * heightS) / height;
+    }
+
     private void RTMApplyScalingDetour(RenderTargetManagerEx* rtm, uint* size, byte unk1)
     {
         ref var cfg = ref Service.Config._.Game;
@@ -307,10 +338,30 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         _ddx11PostTickHook.OriginalDisposeSafe(dev);
     }
 
-    private void GetScaledWidthHeight(uint width, uint height, float scale, out uint widthS, out uint heightS)
+    private void TaskRenderGraphicsRenderDetour()
     {
-        heightS = (uint) MathF.Round(height * scale);
-        widthS = (width * heightS) / height;
+        ref var cfg = ref Service.Config._.Game;
+        if (Service.Plugin.Unloading || !cfg.IsEnabled)
+        {
+            _taskRenderGraphicsRenderHook.OriginalDisposeSafe();
+            return;
+        }
+
+        lock (_renderLock)
+        {
+            var dev = (DeviceEx*) Device.Instance();
+
+            var _Width = dev->Width;
+            var _Height = dev->Height;
+
+            var scale = MathF.Max(1f, cfg.Scale);
+            GetScaledWidthHeight(_Width, _Height, scale, out dev->Width, out dev->Height);
+
+            _taskRenderGraphicsRenderHook.OriginalDisposeSafe();
+
+            dev->Width = _Width;
+            dev->Height = _Height;
+        }
     }
 
     private enum ForceUpdateRTMState
