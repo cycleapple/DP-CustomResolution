@@ -247,15 +247,8 @@ This is still being worked on before the v1.0 release.");
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(@"Fixes DXVK borderless window causing black screens when alt-tabbing.
-This can *possibly* impact performance, depending on your Windows version and GPU.
-
-Feel free to experiment with this toggle.
-Make sure to switch the game to windowed and then back to borderless windowed when changing.
-
-Works even with the scaling above disabled.
-
-Not intended to be used with proper fullscreen.");
+            ImGui.SetTooltip(@"Smaller tweaks and fixes, f.e. for DXVK on Windows,
+or to allow making the window smaller than 1024x768.");
         }
 
         if (!imTab.Success)
@@ -283,8 +276,15 @@ Not intended to be used with proper fullscreen.");
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(@"Smaller tweaks and fixes, f.e. for DXVK on Windows,
-or to allow making the window smaller than 1024x768.");
+            ImGui.SetTooltip(@"Fixes DXVK borderless window causing black screens when alt-tabbing.
+This can *possibly* impact performance, depending on your Windows version and GPU.
+
+Feel free to experiment with this toggle.
+Make sure to switch the game to windowed and then back to borderless windowed when changing.
+
+Works even with the scaling above disabled.
+
+Not intended to be used with proper fullscreen.");
         }
 
         if (ImGui.BeginCombo("Minimum window size", _.MinSizeMode.ToHumanNameString()))
