@@ -59,7 +59,8 @@ public class Configuration : IPluginConfiguration
         {
             Service.PluginLog.Info("Migrating config V0 to V1");
             V1 = new();
-            // V1.Display.IsEnabled = IsEnabled; // Was enabled by default before, but let's disable.
+            // V1.Display.IsEnabled = IsEnabled;
+            // ... was enabled by default before, but let's disable for the migration.
             V1.Display.IsScale = IsScale;
             V1.Display.Scale = Scale;
             V1.Display.Width = Width;

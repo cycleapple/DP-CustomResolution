@@ -9,6 +9,9 @@ namespace CustomResolution;
 
 public sealed class Service
 {
+
+    public static readonly string PluginName = typeof(Plugin).Assembly.GetName().Name!;
+
     public static Plugin Plugin { get; internal set; } = null!;
 
     public static DisplaySizeState DisplaySize { get; internal set; } = null!;

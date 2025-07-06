@@ -12,6 +12,7 @@ public struct ConfigurationV1
     public ResolutionScalingMode ResolutionScalingMode = ResolutionScalingMode.FSR;
     public DXVKDWMHackMode DXVKDWMHackMode = DXVKDWMHackMode.Off;
     public MinSizeMode MinSizeMode = MinSizeMode.Unchanged;
+    public bool DisableOnHang = true;
 
     public ConfigurationV1()
     {
@@ -38,7 +39,6 @@ public struct ConfigurationV1
 
         public VirtualKey HotkeyKey = VirtualKey.NO_KEY;
         public ModifierKey HotkeyModifier = ModifierKey.NONE;
-
         [NonSerialized]
         public bool HotkeyKeyDown = false;
 

@@ -2,6 +2,7 @@
 using Dalamud.Game.Config;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using ImGuiNET;
 using System;
 using System.Collections.Generic;
@@ -78,40 +79,46 @@ public sealed unsafe class Plugin : IDalamudPlugin
         Service.PluginUI.Dispose();
     }
 
-    private void OnFrameworkUpdateForSize(ref ConfigurationV1.SizeConfig size)
+    private void OnFrameworkUpdateForSize(IFramework framework, string type, ref ConfigurationV1.SizeConfig size)
     {
-        if (size.HotkeyKey == VirtualKey.NO_KEY)
+        if (Service.ClientState.IsLoggedIn && framework.UpdateDelta.TotalSeconds >= 1 && Service.Config._.DisableOnHang && size.IsEnabled)
         {
-            return;
-        }
-
-        var io = ImGui.GetIO();
-        var keyPressedIm = ImGuiNative.igIsKeyPressed((ImGuiKey) size.HotkeyKey, 0) != 0;
-        var keyDownXiv = Service.KeyState.GetRawValue(size.HotkeyKey) != 0;
-
-        if ((keyPressedIm || (keyDownXiv && !size.HotkeyKeyDown)) &&
-            (size.HotkeyModifier switch
-            {
-                ModifierKey.NONE => !io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
-                ModifierKey.CTRL => io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
-                ModifierKey.ALT => !io.KeyCtrl && io.KeyAlt && !io.KeyShift,
-                ModifierKey.SHIFT => !io.KeyCtrl && !io.KeyAlt && io.KeyShift,
-                _ => false,
-            }))
-        {
-            size.IsEnabled = !size.IsEnabled;
+            Service.PluginLog.Warning($"Disabling because hang: {type}");
+            Service.PrintChat($"Lag detected, \"{type}\" custom resolution disabled.");
+            size.IsEnabled = false;
             Service.Config.Save();
         }
 
-        size.HotkeyKeyDown = keyDownXiv;
+        if (size.HotkeyKey != VirtualKey.NO_KEY)
+        {
+            var io = ImGui.GetIO();
+            var keyPressedIm = ImGuiNative.igIsKeyPressed((ImGuiKey) size.HotkeyKey, 0) != 0;
+            var keyDownXiv = Service.KeyState.GetRawValue(size.HotkeyKey) != 0;
+
+            if ((keyPressedIm || (keyDownXiv && !size.HotkeyKeyDown)) &&
+                (size.HotkeyModifier switch
+                {
+                    ModifierKey.NONE => !io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
+                    ModifierKey.CTRL => io.KeyCtrl && !io.KeyAlt && !io.KeyShift,
+                    ModifierKey.ALT => !io.KeyCtrl && io.KeyAlt && !io.KeyShift,
+                    ModifierKey.SHIFT => !io.KeyCtrl && !io.KeyAlt && io.KeyShift,
+                    _ => false,
+                }))
+            {
+                size.IsEnabled = !size.IsEnabled;
+                Service.Config.Save();
+            }
+
+            size.HotkeyKeyDown = keyDownXiv;
+        }
     }
 
     private void OnFrameworkUpdate(IFramework framework)
     {
         lock (_disposeLock)
         {
-            OnFrameworkUpdateForSize(ref Service.Config._.Display);
-            OnFrameworkUpdateForSize(ref Service.Config._.Game);
+            OnFrameworkUpdateForSize(framework, "Display", ref Service.Config._.Display);
+            OnFrameworkUpdateForSize(framework, "Gameplay", ref Service.Config._.Game);
 
             Service.DisplaySize.Update();
             Service.GameSize.Update();

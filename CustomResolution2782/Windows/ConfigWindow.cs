@@ -304,5 +304,18 @@ Not intended to be used with proper fullscreen.");
 
             ImGui.EndCombo();
         }
+
+        ImGui.Checkbox("Game hang protection", ref _.DisableOnHang);
+
+        if (ImGui.IsItemHovered())
+        {
+            ImGui.SetTooltip(@$"Automatically disables scaling if the game hangs for more than a second.
+
+Leave this option enabled if you want this plugin to disable itself as a protection
+in case the resolution changes unexpectedly, or in case the resolution goes too high.
+
+In the absolute worst case, delete the following file to reset your settings:
+%%AppData%%\XIVLauncher\pluginConfigs\{Service.PluginName}.json");
+        }
     }
 }
