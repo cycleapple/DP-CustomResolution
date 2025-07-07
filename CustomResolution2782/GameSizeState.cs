@@ -275,7 +275,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         GetScaledWidthHeight(dev->Width, dev->Height, scale, out var widthS, out var heightS);
 
         // Check if the backing RTs are the expected size.
-        var tex = rtm->GameplayTextureUnk1;
+        var tex = rtm->GameplayTextureUnk3;
         if (tex->AllocatedWidth != widthS || tex->AllocatedHeight != heightS)
         {
             if (!unloading)
@@ -300,7 +300,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
             (rtm->Resolution_Width != widthS || rtm->Resolution_Height != heightS))
         {
             // Can also be forced via dev->RequestResolutionChange, but while cleaner on paper, it trips up ReShade.
-            Service.PluginLog.Debug("_forceUpdateRTM -> 1");
+            Service.PluginLog.Debug($"_forceUpdateRTM -> 1 - expected {widthS} x {heightS}, got {rtm->Resolution_Width} x {rtm->Resolution_Height}");
             _forceUpdateRTM = ForceUpdateRTMState._1_FakeInv;
         }
 
@@ -338,7 +338,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
     private static void GetScaledWidthHeight(uint width, uint height, float scale, out uint widthS, out uint heightS)
     {
-        heightS = (uint) MathF.Round(height * scale);
+        heightS = (uint) MathF.Round(height * scale, MidpointRounding.AwayFromZero);
         widthS = (width * heightS) / height;
     }
 
