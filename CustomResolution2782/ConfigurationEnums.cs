@@ -117,16 +117,27 @@ public static class MinSizeModeExt
 
 public enum ResolutionScalingMode
 {
-    Fast = 0,
-    FSR = 1,
-    DLSS = 2
+    Point = 0,
+    Linear = 1,
+    FSR = 2,
+    DLSS = 3
 }
 
 public static class ResolutionScalingModeExt
 {
+    public static byte ToXIV(this ResolutionScalingMode mode) => mode switch
+    {
+        ResolutionScalingMode.Point => 0,
+        ResolutionScalingMode.Linear => 0,
+        ResolutionScalingMode.FSR => 1,
+        ResolutionScalingMode.DLSS => 2,
+        _ => 0
+    };
+
     public static string ToHumanNameString(this ResolutionScalingMode mode) => mode switch
     {
-        ResolutionScalingMode.Fast => "Fast Pixelation",
+        ResolutionScalingMode.Point => "Pixelated",
+        ResolutionScalingMode.Linear => "Blurry",
         ResolutionScalingMode.FSR => "AMD FSR",
         ResolutionScalingMode.DLSS => "NVIDIA DLSS",
         _ => mode.ToString(),
@@ -134,7 +145,8 @@ public static class ResolutionScalingModeExt
 
     public static string? ToHumanInfoString(this ResolutionScalingMode mode) => mode switch
     {
-        ResolutionScalingMode.Fast => "Lowest quality option which results in blurry pixelation.",
+        ResolutionScalingMode.Point => "Lowest quality option which results in pixelation.",
+        ResolutionScalingMode.Linear => "Low quality option which results in blur.",
         ResolutionScalingMode.FSR => "Upscaling which works on any GPU for low performance overhead.",
         ResolutionScalingMode.DLSS => "DLSS in FFXIV is buggy, even without any plugins.",
         _ => null

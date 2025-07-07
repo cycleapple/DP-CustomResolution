@@ -6,6 +6,7 @@ using FloppyUtils;
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
+using TerraFX.Interop.DirectX;
 using TerraFX.Interop.Windows;
 using static TerraFX.Interop.Windows.Windows;
 
@@ -421,13 +422,14 @@ public unsafe struct DeviceEx
     public ref uint NewHeight => ref _.NewHeight;
 
     // C# doesn't let us use ptr types as generic arguments, oh well.
+    public readonly ID3D11DeviceContext* D3D11DeviceContext => (ID3D11DeviceContext*) _.D3D11DeviceContext;
     public readonly ImmediateContextEx* ImmediateContext => (ImmediateContextEx*) _.ImmediateContext;
 }
 
 // ImmediateContextEx in FFXIVClientStructs is a bare minimum.
 // https://github.com/aers/FFXIVClientStructs/blob/ef5e9a5997671fb2c9a72cb9d57d841855f62085/FFXIVClientStructs/FFXIV/Client/Graphics/Kernel/ImmediateContext.cs
 [StructLayout(LayoutKind.Explicit)]
-public struct ImmediateContextEx
+public unsafe struct ImmediateContextEx
 {
     [FieldOffset(0)]
     public ImmediateContext _;

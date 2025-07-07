@@ -8,27 +8,6 @@
         "resolved": "12.0.0",
         "contentHash": "J5TJLV3f16T/E2H2P17ClWjtfEBPpq3yxvqW46eN36JCm6wR+EaoaYkqG9Rm5sHqs3/nK/vKjWWyvEs/jhKoXw=="
       },
-      "SharpDX.D3DCompiler": {
-        "type": "Direct",
-        "requested": "[4.2.0, )",
-        "resolved": "4.2.0",
-        "contentHash": "Rnsd6Ilp127xbXqhTit8WKFQUrXwWxqVGpglyWDNkIBCk0tWXNQEjrJpsl0KAObzyZaa33+EXAikLVt5fnd3GA==",
-        "dependencies": {
-          "NETStandard.Library": "1.6.1",
-          "SharpDX": "4.2.0"
-        }
-      },
-      "SharpDX.Direct2D1": {
-        "type": "Direct",
-        "requested": "[4.2.0, )",
-        "resolved": "4.2.0",
-        "contentHash": "Qs8LzDMaQf1u3KB8ArHu9pDv6itZ++QXs99a/bVAG+nKr0Hx5NG4mcN5vsfE0mVR2TkeHfeUm4PksRah6VUPtA==",
-        "dependencies": {
-          "NETStandard.Library": "1.6.1",
-          "SharpDX": "4.2.0",
-          "SharpDX.DXGI": "4.2.0"
-        }
-      },
       "SharpDX.Direct3D11": {
         "type": "Direct",
         "requested": "[4.2.0, )",
@@ -39,12 +18,6 @@
           "SharpDX": "4.2.0",
           "SharpDX.DXGI": "4.2.0"
         }
-      },
-      "TerraFX.Interop.Windows": {
-        "type": "Direct",
-        "requested": "[10.0.22621.2, )",
-        "resolved": "10.0.22621.2",
-        "contentHash": "lORoYCoURS33Vi7PDvubRugLF2+l5v3rX2oVEqNhpBLjs3aZpqapRvTHPKVwsC+dGrsGuqJ/3yXuxVUb0vl3vg=="
       },
       "Microsoft.NETCore.Platforms": {
         "type": "Transitive",

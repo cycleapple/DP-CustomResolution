@@ -23,15 +23,6 @@ everything where it was while still allowing you to switch between game scaling 
 is that this does NOT affect the screenshot resolution.
 </details>
 
-<details><summary>I'm scaling by 3x or higher, but I'm still getting jagged edges!</summary>
-The plugin currently only gives FFXIV a fake resolution to work with internally, but it doesn't ensure that the
-extra pixels land on your screen. When scaling the display resolution, those will still be used for in-game or ReShade screenshots though.
-
-Windows should perform basic filtering with 2x scaling (it might not work on some graphics cards?), and I haven't
-heard back from anyone using this on Linux yet. But an universal fix for this is possible - it just requires more
-time than I have on my hands right now.
-</details>
-
 <details><summary>I'm using DLSS, and my game looks pixelated / is small!</summary>
 DLSS in FFXIV is bugged. No, I'm not joking: even without any plugins or mods loaded, it can glitch out when
 simply resizing the window (most notably by rapidly pressing WinKey + Down and WinKey + Up).

@@ -154,16 +154,7 @@ Changed via /gres");
 
         DrawSizeTabShared(ref _.Game, "Game", scaleOnly: true);
 
-        using (_.Game.Scale > 2f ? ImRaii.PushColor(ImGuiCol.Border, 0xff00ffff) : null)
-        {
-            ImGui.InputFloat("Scale", ref _.Game.Scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.None);
-        }
-
-        if (_.Game.Scale > 2f && ImGui.IsItemHovered())
-        {
-            ImGui.SetTooltip(@"Scaling larger than 2x currently doesn't improve antialiasing!
-This is still being worked on before the v1.0 release.");
-        }
+        ImGui.InputFloat("Scale", ref _.Game.Scale, 0.01f, 0.1f, "%.3f", ImGuiInputTextFlags.None);
 
         if (ImGui.BeginCombo("Graphics Upscaling", _.ResolutionScalingMode.ToHumanNameString()))
         {

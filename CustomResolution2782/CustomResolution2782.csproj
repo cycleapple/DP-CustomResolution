@@ -19,6 +19,7 @@
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <RestorePackagesWithLockFile>true</RestorePackagesWithLockFile>
     <RootNamespace>CustomResolution</RootNamespace>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
   </PropertyGroup>
 
   <PropertyGroup>
@@ -30,7 +31,6 @@
 
   <ItemGroup>
     <PackageReference Include="DalamudPackager" Version="12.0.0" />
-    <PackageReference Include="TerraFX.Interop.Windows" Version="10.0.22621.2" />
     <Reference Include="FFXIVClientStructs">
       <HintPath>$(DalamudLibPath)FFXIVClientStructs.dll</HintPath>
       <Private>false</Private>
@@ -71,9 +71,11 @@
       <HintPath>$(DalamudLibPath)SharpDX.Mathematics.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <PackageReference Include="SharpDX.D3DCompiler" Version="4.2.0" />
+    <Reference Include="TerraFX.Interop.Windows">
+      <HintPath>$(DalamudLibPath)TerraFX.Interop.Windows.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
     <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
-    <PackageReference Include="SharpDX.Direct2D1" Version="4.2.0" />
   </ItemGroup>
 
 </Project>
