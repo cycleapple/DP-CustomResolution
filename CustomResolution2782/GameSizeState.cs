@@ -152,8 +152,7 @@ public unsafe class GameSizeState : IDisposable
         _immediateBindCSSRVsHook.Enable();
 
         /* And because all that isn't bad enough:
-         * Hook ID3D11Device funcs based on their vtable indices, to allow mipmap generation,
-         * and to allow changing the sampler state before drawing.
+         * Hook CreateTexture2D to forcibly set the mipmap generation flag.
          */
         _createTexture2DHook = Service.GameInteropProvider.HookFromAddress<CreateTexture2D>(
             ((ID3D11Device*) _d3ddev.NativePointer)->lpVtbl[5],
@@ -199,8 +198,6 @@ public unsafe class GameSizeState : IDisposable
     private delegate void ImmediateBindCSSRVs(ImmediateContextEx* im, Shader* cs, ImmediateSRV* data);
 
     private delegate int CreateTexture2D(ID3D11Device* d3ddev, D3D11_TEXTURE2D_DESC* desc, D3D11_SUBRESOURCE_DATA* initialData, ID3D11Texture2D** tex);
-
-    private delegate void Draw(ID3D11DeviceContext* d3dctx, uint vertexCount, uint startVertexLocation);
 
     public void Dispose()
     {
@@ -593,8 +590,8 @@ public unsafe struct RenderTargetManagerEx
     [FieldOffset(0)]
     public RenderTargetManager _;
 
-    // Totle screen: Gets blitted FROM after actual gameplay texture. Actual purpose unknown.
-    // Im-game outdoors: Gets blitted to backbuffer.
+    // Title screen: Gets blitted FROM after actual gameplay texture. Actual purpose unknown.
+    // In-game outdoors: Gets blitted to backbuffer.
     [FieldOffset(0x68)]
     public Texture* GameplayTextureUnk1;
 
