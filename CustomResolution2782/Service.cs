@@ -58,6 +58,9 @@ public sealed class Service
     [PluginService]
     public static IGameConfig GameConfig { get; private set; } = null!;
 
+    [PluginService]
+    public static INotificationManager NotificationManager { get; private set; } = null!;
+
     public static void PrintChat(string msg)
     {
         ChatGui.Print(new XivChatEntry

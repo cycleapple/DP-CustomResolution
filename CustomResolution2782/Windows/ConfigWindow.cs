@@ -166,7 +166,7 @@ Changed via /gres");
         {
             using var border = ImRaii.PushColor(ImGuiCol.Border, 0xFF00FFFF);
             if (ImGui.Button(@$"Your game system configuration is currently stuck on
-an unsupported graphics upscaling option: {Service.GameSize.ConfigGraphicsRezoType}
+an unsupported graphics upscaling option: {Service.GameSize.ConfigGraphicsRezoType.ToHumanNameString()}
 
 This can happen after you've replaced your GPU,
 or when your graphic driver has encountered problems.
@@ -330,11 +330,11 @@ Not intended to be used with proper fullscreen.");
             ImGui.EndCombo();
         }
 
-        ImGui.Checkbox("Game hang protection", ref _.DisableOnHang);
+        ImGui.Checkbox("Disable on lag", ref _.DisableOnHang);
 
         if (ImGui.IsItemHovered())
         {
-            ImGui.SetTooltip(@$"Automatically disables scaling if the game hangs for more than a second.
+            ImGui.SetTooltip(@$"Automatically disables scaling if FPS goes below 1 FPS.
 
 Leave this option enabled if you want this plugin to disable itself as a protection
 in case the resolution changes unexpectedly, or in case the resolution goes too high.
@@ -348,5 +348,10 @@ In the absolute worst case, delete the following file to reset your settings:
         ImGui.Checkbox("DEBUG!", ref debug);
         Service.DebugConfig.IsDebug = debug;
 #endif
+
+        if (Service.DebugConfig.IsDebug)
+        {
+            ImGui.Text($"LAG: {Service.Plugin.LagsTotal} {Service.Plugin.Lag}");
+        }
     }
 }

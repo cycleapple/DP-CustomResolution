@@ -176,9 +176,7 @@ public static class ResolutionScalingModeExt
 
     public static bool IsBroken(this ResolutionScalingMode mode) => mode switch
     {
-#if !DEBUG
-        ResolutionScalingMode.DLSS => true,
-#endif
+        ResolutionScalingMode.DLSS => !Service.DebugConfig.IsDebug,
         _ => false
     };
 

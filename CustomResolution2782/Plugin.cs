@@ -1,5 +1,6 @@
 ﻿using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Config;
+using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
 using ImGuiNET;
@@ -15,6 +16,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     private readonly List<Cmd> _cmds;
     private bool _ignoreConfigChanges = false;
+
+    private int _lagsIndex = 0;
+    private readonly bool[] _lagsAll = new bool[5];
 
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
@@ -54,6 +58,9 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public bool Unloading { get; private set; } = false;
 
+    public int LagsTotal { get; private set; } = 0;
+    public bool Lag { get; private set; } = false;
+
     public void Dispose()
     {
         Unloading = true;
@@ -80,10 +87,25 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdateForSize(IFramework framework, string type, ref ConfigurationV1.SizeConfig size)
     {
-        if (Service.ClientState.IsLoggedIn && framework.UpdateDelta.TotalSeconds >= 1 && Service.Config._.DisableOnHang && size.IsEnabled)
+        if (Lag && Service.Config._.DisableOnHang && size.IsEnabled)
         {
             Service.PluginLog.Warning($"Disabling because hang: {type}");
-            Service.PrintChat($"Lag detected, \"{type}\" custom resolution disabled.");
+            if (Service.ClientState.IsLoggedIn)
+            {
+                Service.PrintChat($"Lag detected, \"{type}\" custom resolution disabled.");
+            }
+            else
+            {
+                // An initial duration of 15 might seem absurd, but we're dealing with lag here!
+                Service.NotificationManager.AddNotification(new Notification()
+                {
+                    Title = "CustomResolution",
+                    Content = $"Lag detected, \"{type}\" custom resolution disabled.",
+                    Type = NotificationType.Error,
+                    InitialDuration = TimeSpan.FromSeconds(framework.UpdateDelta.TotalSeconds + 15),
+                    Minimized = false
+                });
+            }
             size.IsEnabled = false;
             Service.Config.Save();
         }
@@ -114,6 +136,18 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     private void OnFrameworkUpdate(IFramework framework)
     {
+        if (_lagsAll[_lagsIndex])
+        {
+            LagsTotal--;
+        }
+        if (_lagsAll[_lagsIndex] = framework.UpdateDelta.TotalSeconds > 1.0)
+        {
+            LagsTotal++;
+        }
+        _lagsIndex = (_lagsIndex + 1) % _lagsAll.Length;
+
+        Lag = LagsTotal == _lagsAll.Length;
+
         lock (_disposeLock)
         {
             OnFrameworkUpdateForSize(framework, "Display", ref Service.Config._.Display);
