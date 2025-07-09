@@ -125,7 +125,29 @@ public enum ResolutionScalingMode
 
 public static class ResolutionScalingModeExt
 {
-    public static byte ToXIV(this ResolutionScalingMode mode) => mode switch
+    public static ResolutionScalingMode FromXIVSysConf(uint mode) => mode switch
+    {
+        0 => ResolutionScalingMode.FSR,
+        1 => ResolutionScalingMode.DLSS,
+        _ => ResolutionScalingMode.Linear
+    };
+
+    public static uint ToXIVSysConf(this ResolutionScalingMode mode) => mode switch
+    {
+        ResolutionScalingMode.FSR => 0,
+        ResolutionScalingMode.DLSS => 1,
+        _ => 0
+    };
+
+    public static ResolutionScalingMode FromXIVGFX(byte mode) => mode switch
+    {
+        0 => ResolutionScalingMode.Linear,
+        1 => ResolutionScalingMode.FSR,
+        2 => ResolutionScalingMode.DLSS,
+        _ => ResolutionScalingMode.Linear
+    };
+
+    public static byte ToXIVGFX(this ResolutionScalingMode mode) => mode switch
     {
         ResolutionScalingMode.Point => 0,
         ResolutionScalingMode.Linear => 0,
@@ -152,5 +174,20 @@ public static class ResolutionScalingModeExt
         _ => null
     };
 
-    public static bool IsUnsupported(this ResolutionScalingMode mode) => mode == ResolutionScalingMode.DLSS;
+    public static bool IsBroken(this ResolutionScalingMode mode) => mode switch
+    {
+#if !DEBUG
+        ResolutionScalingMode.DLSS => true,
+#endif
+        _ => false
+    };
+
+    public static unsafe bool IsSupported(this ResolutionScalingMode mode) => mode switch
+    {
+        ResolutionScalingMode.DLSS => PostEffectManagerEx.Instance()->DLSS != null,
+        _ => true,
+    };
+
+    public static ResolutionScalingMode ToSupported(this ResolutionScalingMode mode) =>
+        !mode.IsSupported() ? ResolutionScalingMode.FSR : mode;
 }

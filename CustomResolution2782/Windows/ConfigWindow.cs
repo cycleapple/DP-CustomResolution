@@ -125,7 +125,22 @@ Changed via /cres");
 
     private void DrawGameTab()
     {
-        using var imTab = ImRaii.TabItem($"Gameplay##GameTab");
+        var unsupportedSysScale = !Service.GameSize.ConfigGraphicsRezoType.IsSupported();
+
+        var blinkTime = (DateTime.UtcNow.Ticks % TimeSpan.TicksPerHour) / (float) TimeSpan.TicksPerSecond;
+        var blink = (blinkTime % 2) < 1;
+
+        if (unsupportedSysScale && blink)
+        {
+            ImGui.PushStyleColor(ImGuiCol.Border, 0xFF00FFFF);
+        }
+
+        using var imTab = ImRaii.TabItem($"Gameplay{(unsupportedSysScale ? " \uE0C0" : "")}##GameTab");
+
+        if (unsupportedSysScale && blink)
+        {
+            ImGui.PopStyleColor();
+        }
 
         if (ImGui.IsItemHovered())
         {
@@ -147,6 +162,21 @@ Changed via /gres");
             return;
         }
 
+        if (unsupportedSysScale)
+        {
+            using var border = ImRaii.PushColor(ImGuiCol.Border, 0xFF00FFFF);
+            if (ImGui.Button(@$"Your game system configuration is currently stuck on
+an unsupported graphics upscaling option: {Service.GameSize.ConfigGraphicsRezoType}
+
+This can happen after you've replaced your GPU,
+or when your graphic driver has encountered problems.
+
+Click here to reset to FSR and fix the scaling slider.##FixDLSS"))
+            {
+                Service.GameSize.SetConfigGraphicsRezoType(ResolutionScalingMode.FSR);
+            }
+        }
+
         using (ImRaii.Disabled())
         {
             ImGui.InputInt2("Current size", ref _displayCurrentGameWH[0]);
@@ -160,7 +190,7 @@ Changed via /gres");
         {
             foreach (var mode in Enum.GetValues<ResolutionScalingMode>())
             {
-                if (ImGui.Selectable(mode.ToHumanNameString(), _.ResolutionScalingMode == mode, mode.IsUnsupported() ? ImGuiSelectableFlags.Disabled : ImGuiSelectableFlags.None))
+                if (ImGui.Selectable(mode.ToHumanNameString(), _.ResolutionScalingMode == mode, mode.IsBroken() ? ImGuiSelectableFlags.Disabled : ImGuiSelectableFlags.None))
                 {
                     _.ResolutionScalingMode = mode;
                 }
@@ -176,10 +206,14 @@ Changed via /gres");
 
         if (Service.DebugConfig.IsDebug)
         {
+            if (ImGui.Button("(DEBUG) Set game config to DLSS"))
+            {
+                Service.GameSize.SetConfigGraphicsRezoType(ResolutionScalingMode.DLSS);
+            }
+
             ImGui.Text(Service.GameSize.DebugInfo);
         }
     }
-
 
     private void DrawSizeTabShared(ref ConfigurationV1.SizeConfig size, string name, bool scaleOnly = false)
     {
@@ -308,5 +342,11 @@ in case the resolution changes unexpectedly, or in case the resolution goes too 
 In the absolute worst case, delete the following file to reset your settings:
 %%AppData%%\XIVLauncher\pluginConfigs\{Service.PluginName}.json");
         }
+
+#if DEBUG
+        var debug = Service.DebugConfig.IsDebug;
+        ImGui.Checkbox("DEBUG!", ref debug);
+        Service.DebugConfig.IsDebug = debug;
+#endif
     }
 }

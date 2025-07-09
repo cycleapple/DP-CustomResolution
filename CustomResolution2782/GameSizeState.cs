@@ -6,6 +6,7 @@ using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FloppyUtils;
 using SharpDX;
 using System;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
 using TerraFX.Interop.DirectX;
@@ -28,10 +29,13 @@ public unsafe class GameSizeState : IDisposable
     private Hook<ImmediateBindCSSRVs> _immediateBindCSSRVsHook;
     private Hook<CreateTexture2D> _createTexture2DHook;
 
+    private PostEffectManagerEx* _postEffectManager;
+
     private SDX11.DeviceContext _d3dctx;
     private SDX11.Device _d3ddev;
     private SDX11.SamplerState _samplerMips;
     private SDX11.SamplerState _samplerPoint;
+    private SDX11.SamplerState _samplerLinear;
 
     private bool _wasEnabled = false;
     private object _renderLock = new();
@@ -40,8 +44,14 @@ public unsafe class GameSizeState : IDisposable
 
     private uint _drawCount;
 
+    private ResolutionScalingMode? _setConfigGraphicsRezoType;
+
     public GameSizeState()
     {
+        var pfx = PostEffectManagerEx.Instance();
+        Service.PluginLog.Debug($"PostEffectManager: 0x{(long) (nint) pfx:X16}");
+        Service.PluginLog.Info($"DLSS: {(pfx->DLSS != null ? "Available" : "Unavailable")}");
+
         var dev = (DeviceEx*) Device.Instance();
         _d3dctx = CppObject.FromPointer<SDX11.DeviceContext>((nint) dev->D3D11DeviceContext);
         _d3ddev = _d3dctx.Device;
@@ -57,6 +67,9 @@ public unsafe class GameSizeState : IDisposable
         samplerDesc.MinimumLod = 0;
         samplerDesc.MaximumLod = 0;
         _samplerPoint = new(_d3ddev, samplerDesc);
+
+        samplerDesc.Filter = SDX11.Filter.MinMagLinearMipPoint;
+        _samplerLinear = new(_d3ddev, samplerDesc);
 
         /* Writes DynamicResolutionTargetHeight to size[1] near the end,
          * but if in (gpose || main menu), only scale < 1??
@@ -213,11 +226,17 @@ public unsafe class GameSizeState : IDisposable
         _createTexture2DHook.Dispose();
         lock (_renderLock)
         {
+            _samplerLinear.Dispose();
             _samplerPoint.Dispose();
             _samplerMips.Dispose();
         }
         _d3ddev.Dispose();
         Service.Framework.RunOnFrameworkThread(Update);
+    }
+
+    public void SetConfigGraphicsRezoType(ResolutionScalingMode mode)
+    {
+        _setConfigGraphicsRezoType = mode;
     }
 
     public void Update()
@@ -226,9 +245,15 @@ public unsafe class GameSizeState : IDisposable
 
         ref var cfg = ref Service.Config._.Game;
 
+        if (_setConfigGraphicsRezoType is { } setType)
+        {
+            _setConfigGraphicsRezoType = null;
+            Service.GameConfig.System.Set(SystemConfigOption.GraphicsRezoUpscaleType.ToString(), setType.ToXIVSysConf());
+        }
+
         ConfigDynRezo = Service.GameConfig.System.GetUInt(SystemConfigOption.DynamicRezoType.ToString()) != 0U;
         // GameConfig starts with FSR at 0; GraphicsConfig starts with FSR at 1
-        ConfigGraphicsRezoType = (ResolutionScalingMode) (Service.GameConfig.System.GetUInt(SystemConfigOption.GraphicsRezoUpscaleType.ToString()) + 1);
+        ConfigGraphicsRezoType = ResolutionScalingModeExt.FromXIVSysConf(Service.GameConfig.System.GetUInt(SystemConfigOption.GraphicsRezoUpscaleType.ToString()));
         ConfigGraphicsRezoScale = Service.GameConfig.System.GetUInt(SystemConfigOption.GraphicsRezoScale.ToString()) / 100f;
 
         var dev = (DeviceEx*) Device.Instance();
@@ -239,9 +264,6 @@ public unsafe class GameSizeState : IDisposable
         {
             _dbg.Append(@$"DR !{gfx->DynamicRezoEnable} +{gfx->DynamicRezoEnableBeyond1} _{gfx->DynamicRezoEnableCutScene} ?{gfx->DynamicRezoEnableUnkx47} ?{gfx->DynamicRezoEnableUnkx48}
 GR x{gfx->GraphicsRezoScale} ?{gfx->GraphicsRezoUnk1} _{gfx->GraphicsRezoUpscaleType} ?{gfx->GraphicsRezoUnk2}
-DEV 0x{(long) (nint) dev:X16}
-GFX 0x{(long) (nint) gfx:X16}
-RTM 0x{(long) (nint) rtm:X16}
 RTM {rtm->Resolution_Width} x {rtm->Resolution_Height}
 RTM H {rtm->DynamicResolutionActualTargetHeight} {rtm->DynamicResolutionTargetHeight} {rtm->DynamicResolutionMaximumHeight} {rtm->DynamicResolutionMinimumHeight}
 RTM S {rtm->GraphicsRezoScalePrev} {rtm->GraphicsRezoScaleGlassX} {rtm->GraphicsRezoScaleGlassY} {rtm->GraphicsRezoScaleGlassX} {rtm->GraphicsRezoScaleGlassY}
@@ -258,12 +280,12 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
             gfx->DynamicRezoEnable = (byte) (ConfigDynRezo || enabled ? 1 : 0);
             if (enabled)
             {
-                gfx->GraphicsRezoUpscaleType = cfg.Scale <= 1f ? Service.Config._.ResolutionScalingMode.ToXIV() : ResolutionScalingMode.Linear.ToXIV();
+                gfx->GraphicsRezoUpscaleType = cfg.Scale <= 1f ? Service.Config._.ResolutionScalingMode.ToXIVGFX() : ResolutionScalingMode.Linear.ToXIVGFX();
                 rtm->DynamicResolutionMinimumHeight = rtm->DynamicResolutionMaximumHeight;
             }
             else
             {
-                gfx->GraphicsRezoUpscaleType = (byte) ConfigGraphicsRezoType;
+                gfx->GraphicsRezoUpscaleType = ConfigGraphicsRezoType.ToSupported().ToXIVGFX();
             }
             _wasEnabled = enabled;
         }
@@ -277,9 +299,10 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         {
             if (!unloading)
             {
+                Service.PluginLog.Debug($"Regenerating dirty RTM - locking ImmediateContextDX11.ProcessCommands");
                 lock (_renderLock)
                 {
-                    Service.PluginLog.Debug($"Regenerating dirty RTM - locking ImmediateContextDX11.ProcessCommands");
+                    Service.PluginLog.Debug($"Regenerating dirty RTM - locked ImmediateContextDX11.ProcessCommands");
                     dev->RequestResolutionChange = 1;
                     RTMDestroyAfterResizeDetour();
                     RTMRegenAfterResizeDetour();
@@ -341,6 +364,8 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
     private void RTMApplyScalingDetour(RenderTargetManagerEx* rtm, uint* size, byte unk1)
     {
+        Debug.Assert(rtm == RenderTargetManager.Instance());
+
         ref var cfg = ref Service.Config._.Game;
         if (Service.Plugin.Unloading || !cfg.IsEnabled)
         {
@@ -452,6 +477,8 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         ImmediateContextEx* im, PixelShader* ps, ImmediateSRV* data
     )
     {
+        Debug.Assert(im == Device.Instance()->ImmediateContext);
+
         var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
         bool called = false;
 
@@ -463,22 +490,29 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
             Orig();
 
+            SDX11.SamplerState? sampler = null;
+
             if (Service.Config._.Game.IsEnabled && Service.Config._.ResolutionScalingMode == ResolutionScalingMode.Point)
             {
-                stage.SetSampler(0, _samplerPoint);
-                if (!isPS)
-                {
-                    _d3dctx.PixelShader.SetSampler(0, _samplerPoint);
-                }
+                sampler = _samplerPoint;
             }
             else if (tex->MipLevel != 1)
             {
-                _d3dctx.PixelShader.SetSampler(0, _samplerMips);
+                sampler = _samplerMips;
+                _d3dctx.GenerateMips(CppObject.FromPointer<SDX11.ShaderResourceView>((nint) tex->D3D11ShaderResourceView));
+            }
+            else if (Service.Config._.Game.IsEnabled && Service.Config._.ResolutionScalingMode == ResolutionScalingMode.Linear)
+            {
+                sampler = _samplerLinear;
+            }
+
+            if (sampler is not null)
+            {
+                stage.SetSampler(0, sampler);
                 if (!isPS)
                 {
-                    _d3dctx.PixelShader.SetSampler(0, _samplerMips);
+                    _d3dctx.PixelShader.SetSampler(0, sampler);
                 }
-                _d3dctx.GenerateMips(CppObject.FromPointer<SDX11.ShaderResourceView>((nint) tex->D3D11ShaderResourceView));
             }
         }
 
@@ -647,3 +681,32 @@ public unsafe struct ImmediateSRV
     [FieldOffset(0x14)]
     public uint Unkx14;
 }
+
+// There's currently no effort to C#-ify the PostEffectManager findings in CS.
+[StructLayout(LayoutKind.Explicit)]
+public unsafe struct PostEffectManagerEx
+{
+    private static PostEffectManagerEx* _instance;
+
+    public static PostEffectManagerEx* Instance()
+    {
+        if (Service.SigScanner is null)
+        {
+            return null;
+        }
+
+        var code = Service.SigScanner.ScanText("48 83 EC ?? 48 8B 05 ?? ?? ?? ?? 49 8B F9 49 8B F0 4C 8B F2 48 8B 98 ?? ?? 00 00 48 85 DB");
+        var found = Service.SigScanner.ResolveRelativeAddress(code + 4 + 7, *(int*) (code + 4 + 3));
+        return _instance = (PostEffectManagerEx*) *(nint*) found;
+    }
+
+    /* Identifiable by being used for DLSS initialization when the upscale type == 2,
+     * and containing NVSDK NGX capability param attribs at *+0x158 since 2024?
+     * The function setting it up is very similar to NVIDIA's sample code,
+     * but in case of emergency, CTRL+F NVSDK_NGX_D3D11_GetCapabilityParameters (always exported?)
+     * and the two magic strings "SuperSampling.NeedsUpdatedDriver" and "SuperSampling.Available"
+     */
+    [FieldOffset(0x4220)]
+    public void* DLSS;
+}
+

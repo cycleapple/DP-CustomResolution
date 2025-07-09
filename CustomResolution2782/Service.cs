@@ -1,6 +1,7 @@
 ﻿using CustomResolution.Hooks;
 using Dalamud.Game;
 using Dalamud.Game.Text;
+using Dalamud.Interface;
 using Dalamud.IoC;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
