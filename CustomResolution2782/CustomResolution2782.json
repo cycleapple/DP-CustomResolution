@@ -3,7 +3,7 @@
 	"InternalName": "CustomResolution2782",
 	"Author": "0x0ade",
 	"ApplicableVersion": "any",
-	"DalamudApiLevel": 12,
+	"DalamudApiLevel": 13,
 	"Punchline": "Enforces a custom resolution for the game, similar to NVIDIA DSR.",
 	"Description": "Basic plugin that allows you to specify a custom resolution.",
 	"Tags": [ "dsr", "resolution", "dpi", "scale", "scaling" ],

@@ -22,14 +22,11 @@ public unsafe class GameSizeState : IDisposable
     private Hook<RTMDestroyAfterResize> _rtmDestroyAfterResizeHook;
     private Hook<RTMRegenAfterResize> _rtmRegenAfterResizeHook;
     private Hook<ImmediateProcessCommands> _immediateProcessCommandsHook;
-    private Hook<DDX11PostTick> _ddx11PostTickHook;
     private Hook<TaskRenderGraphicsRender> _taskRenderGraphicsRenderHook;
     private Hook<PrepareTexture> _prepareTextureHook;
     private Hook<ImmediateBindPSSRVs> _immediateBindPSSRVsHook;
     private Hook<ImmediateBindCSSRVs> _immediateBindCSSRVsHook;
     private Hook<CreateTexture2D> _createTexture2DHook;
-
-    private PostEffectManagerEx* _postEffectManager;
 
     private SDX11.DeviceContext _d3dctx;
     private SDX11.Device _d3ddev;
@@ -75,7 +72,10 @@ public unsafe class GameSizeState : IDisposable
          * but if in (gpose || main menu), only scale < 1??
          */
         _rtmApplyScalingHook = Service.GameInteropProvider.HookFromAddress<RTMApplyScaling>(
-            Service.SigScanner.ScanText("48 89 5C 24 18 55 56 57 41 56 41 57 48 83 EC 20 8B 42 04 0F 57 C0 48 8B"),
+            // Function
+            Service.SigScanner.ScanText("48 89 5C 24 18 55 56 57 41 56 41 57 48 83 EC 20 8B 42 04 0F 57 C0 48 8B")
+                // Call site, currently unknown what exactly it belongs to
+                .Verify(Service.SigScanner.ScanRVASig(new("48 89 5C 24 48| 45 33 C0| 48 8B 1D ?? ?? ?? ??| 48 8B F1| 48 89 6C 24 50| 4C 89 74 24 20| 4C 8D B1 28 04 00 00| 49 8B D6| 48 8B 83 8C 00 00 00| 49 89 06| (E8 *95 08 00 00)| 48 8B 05 ?? ?? ?? ??| B9 01 00 00 00| 0F B6 50 33| 41 8B 06|"))),
             RTMApplyScalingDetour
         );
         _rtmApplyScalingHook.Enable();
@@ -94,13 +94,14 @@ public unsafe class GameSizeState : IDisposable
          * It's most notable for not being called directly (only via a shim that gets icalled),
          * and for being in the stack trace when dxgi updates the RT ptrs.
          */
+        var rtmCallbacks = new MultiRVASig("89 81 2C 04 00 00| B8 56 55 55 55| 41 F7 E8| 45 33 C0| 8B C2| C1 E8 1F| 03 D0| 66 89 91 F6 06 00 00| 48 8D 15 ?? ?? ?? ??| 48 8B CB| E8 ?? ?? ?? ??| 45 33 C0| 89 87 60 04 00 00| 48 8D 15 ?? ?? ?? ??| 48 8B CB| E8 ?? ?? ?? ??| 45 33 C0| 89 87 64 04 00 00| (48 8D 15 *?? ?? ?? ??)| 48 8B CB| E8 ?? ?? ?? ??| 45 33 C0| 89 87 68 04 00 00| (48 8D 15 *?? ?? ?? ??)| 48 8B CB| E8 ?? ?? ?? ??| 89 87 6C 04 00 00| 41 BD 01 00 00 00| 48 8B 15 ?? ?? ?? ??| 41 8B CD| 41 BF 50 14 00 00| C7 44 24 28 03 00 00 00| 41 B9 50 82 00 00| C7 44 24 20 08 00 00 00| 45 8B C5| 0F B6 42 33| 2B C8|");
         _rtmDestroyAfterResizeHook = Service.GameInteropProvider.HookFromAddress<RTMDestroyAfterResize>(
-            dev->RenderTargetManagerResizeDestroyCallback->Slots[0].Function,
+            dev->RenderTargetManagerResizeDestroyCallback->Slots[0].Function.Verify(Service.SigScanner.ScanRVASig(rtmCallbacks.Sigs[0])),
             RTMDestroyAfterResizeDetour
         );
         _rtmDestroyAfterResizeHook.Enable();
         _rtmRegenAfterResizeHook = Service.GameInteropProvider.HookFromAddress<RTMRegenAfterResize>(
-            dev->RenderTargetManagerResizeRegenCallback->Slots[0].Function,
+            dev->RenderTargetManagerResizeRegenCallback->Slots[0].Function.Verify(Service.SigScanner.ScanRVASig(rtmCallbacks.Sigs[1])),
             RTMRegenAfterResizeDetour
         );
         _rtmRegenAfterResizeHook.Enable();
@@ -110,18 +111,17 @@ public unsafe class GameSizeState : IDisposable
          * While we can regen RTMs after ProcessCommands is done, it would still leave us
          * with some other race conditions regarding the fields we modify.
          * Let's wrap it in a C# lock and call it a day...
+         *
+         * Identifiable by being called by DeviceDX11.PostTick and RenderThread.Run
          */
         _immediateProcessCommandsHook = Service.GameInteropProvider.HookFromAddress<ImmediateProcessCommands>(
-            Service.SigScanner.ScanText("48 89 5C 24 10 48 89 6C 24 18 56 57 41 56 48 83 EC 30 48 8B 01 41 8B F0 48 8B EA"),
+            // DeviceX11.PostTick call site
+            Service.SigScanner.ScanRVASig(new("8B 86 88 00 00 00| 85 C0| 75 0C| C7 86 88 00 00 00 01 00 00 00| EB 05| 83 F8 01| 75 1A| 44 8B 86 10 09 00 00| 48 8B 96 08 09 00 00| 48 8B 8E C0 0A 0E 00| (E8 *?? ?? ?? ??)| 48 8B 8E B0 0A 0E 00| 48 8B 01| FF 90 70 03 00 00| 83 BE 88 00 00 00 01| 75 47|"))
+                // RenderThread.Run call site
+                .Verify(Service.SigScanner.ScanRVASig(new("48 8B 4B 28| BA FF FF FF FF| FF 15 ?? ?? ?? ??| 0F B6 43 20| 84 C0| 75 3C| 48 8B 0D ?? ?? ?? ??| 83 B9 88 00 00 00 01| 75 1A| 44 8B 81 10 09 00 00| 48 8B 91 08 09 00 00| 48 8B 89 C0 0A 0E 00| (E8 *9E F1 FF FF) 48 8B 4B 30| FF 15 ?? ?? ?? ??|"))),
             ImmediateProcessCommandsDetour
         );
         _immediateProcessCommandsHook.Enable();
-
-        _ddx11PostTickHook = Service.GameInteropProvider.HookFromAddress<DDX11PostTick>(
-            Service.SigScanner.ScanText("48 89 5C 24 10 48 89 6C 24 18 48 89 74 24 20 57 41 54 41 55 41 56 41 57 B8 30 43 00 00 ?? ?? ?? ?? ?? 48 2B E0 48 8B 05 ?? ?? ?? ?? 48 33 C4 48 89 84 24 ?? ?? 00 00 8B 15"),
-            DDX11PostTickDetour
-        );
-        _ddx11PostTickHook.Enable();
 
         /* TaskRenderGraphicsRender has got a prio of 0x1F and seems to be the only task with that prio.
          * Hooking this is relevant for post-processing, and can be validated easily by enabling TSCMAA at >1x scale.
@@ -135,6 +135,7 @@ public unsafe class GameSizeState : IDisposable
                 break;
             }
         }
+        // TODO: Add pointer verification
         Service.PluginLog.Debug($"TaskRenderGraphicsRender Task @ 0x{(long) taskRenderGraphicsRenderTask:X16} -> 0x{(long) (nint) taskRenderGraphicsRenderTask->Func:X16}");
         _taskRenderGraphicsRenderHook = Service.GameInteropProvider.HookFromAddress<TaskRenderGraphicsRender>(
             taskRenderGraphicsRenderTask->Func,
@@ -146,20 +147,24 @@ public unsafe class GameSizeState : IDisposable
          * writing to the mip level count of the gameplay texture and also updating the D3D11 ptrs.
          */
         _prepareTextureHook = Service.GameInteropProvider.HookFromAddress<PrepareTexture>(
-            Service.SigScanner.ScanText("40 53 48 83 EC 20 48 8B 02 48 8B D9 48 89 41 38 48 8B 02 48 89 41 40"),
+            Service.SigScanner.ScanRVASig(new("48 8D 4B 20| E8 ?? ?? ?? ??| 48 89 5F 58| 48 8B 4D A7| 48 85 C9| 74 0A| 48 8B 01| FF 50 10| 4C 89 65 A7| 44 38 67 48| 74 4E| 48 8B 4F 60| 48 8D 57 38| 44 8B 4F 4C| 41 B8 01 00 00 00| 48 85 C9| 74 0B| (E8 *?? ?? ?? ??)| 84 C0| 75 2E| EB 8E| 8B 47 50| 48 8B 0D ?? ?? ?? ??| 0F BA E8 15| C7 44 24 28 01 00 00 00| 89 44 24 20| E8 ?? ?? ?? ??| 48 85 C0|"))
+                .Verify(Service.SigScanner.ScanRVASig(new("48 89 9C 24 C8 00 00 00| 49 8D 95 8C 00 00 00| 48 8B 02| 48 8D 99| 28 04 00 00| 48 89 B4 24 D0 00 00 00| 48 89 03| 48 8B 05 ?? ?? ?? ??| 4C 89 A4 24 D8 00 00 00| 4C 89 B4 24 98 00 00 00| 4C 89 BC 24 90 00 00 00| 80 78 7A 00| 74 20| 48 8B 89 70 03 00 00| 48 85 C9| 74 14| 45 33 C9| 45 8D 41 01| (E8 *?? ?? ?? ??)| 84 C0| 0F 84 07 01 00 00|"))),
             PrepareTextureDetour
         );
         _prepareTextureHook.Enable();
 
         /* The shader resource view of GameplayTexture gets read by these two.
+         * The two functions should be identical with similar usage patterns, but read data from different offsets.
+         * (This trips up some signature scripts for Ghidra, such as Sigga.)
          */
+        // TODO: Add pointer verification
         _immediateBindPSSRVsHook = Service.GameInteropProvider.HookFromAddress<ImmediateBindPSSRVs>(
-            Service.SigScanner.ScanText("48 8B C4 4C 89 40 18 48 89 48 08 53 56 48 83 EC 68 44 8B 5A 44 48 8D B1 E8 03 00 00 4C 89 68 D8"),
+            Service.SigScanner.ScanText("48 8B C4 4C 89 40 18 48 89 48 08 53 56 48 83 EC 68 44 8B 5A 44 48 8D B1 E8 03 00 00 4C 89 68 D8").Log(),
             ImmediateBindPSSRVsDetour
         );
         _immediateBindPSSRVsHook.Enable();
         _immediateBindCSSRVsHook = Service.GameInteropProvider.HookFromAddress<ImmediateBindCSSRVs>(
-            Service.SigScanner.ScanText("48 8B C4 4C 89 40 18 48 89 48 08 53 56 48 83 EC 68 44 8B 5A 44 48 8D B1 E8 13 00 00 4C 89 68 D8"),
+            Service.SigScanner.ScanText("48 8B C4 4C 89 40 18 48 89 48 08 53 56 48 83 EC 68 44 8B 5A 44 48 8D B1 E8 13 00 00 4C 89 68 D8").Log(),
             ImmediateBindCSSRVsDetour
         );
         _immediateBindCSSRVsHook.Enable();
@@ -218,7 +223,6 @@ public unsafe class GameSizeState : IDisposable
         _rtmDestroyAfterResizeHook.Dispose();
         _rtmRegenAfterResizeHook.Dispose();
         _immediateProcessCommandsHook.Dispose();
-        _ddx11PostTickHook.Dispose();
         _taskRenderGraphicsRenderHook.Dispose();
         _prepareTextureHook.Dispose();
         _immediateBindPSSRVsHook.Dispose();
@@ -427,11 +431,6 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         {
             _immediateProcessCommandsHook.OriginalDisposeSafe(ctx, cmds, count);
         }
-    }
-
-    private void DDX11PostTickDetour(DeviceEx* dev)
-    {
-        _ddx11PostTickHook.OriginalDisposeSafe(dev);
     }
 
     private void TaskRenderGraphicsRenderDetour()
@@ -694,10 +693,8 @@ public unsafe struct PostEffectManagerEx
         {
             return null;
         }
-
-        var code = Service.SigScanner.ScanText("48 83 EC ?? 48 8B 05 ?? ?? ?? ?? 49 8B F9 49 8B F0 4C 8B F2 48 8B 98 ?? ?? 00 00 48 85 DB");
-        var found = Service.SigScanner.ResolveRelativeAddress(code + 4 + 7, *(int*) (code + 4 + 3));
-        return _instance = (PostEffectManagerEx*) *(nint*) found;
+        
+        return _instance = (PostEffectManagerEx*) *(nint*) Service.SigScanner.ScanRVASig(new("48 83 EC ??| (48 8B 05 *?? ?? ?? ??)| 49 8B F9| 49 8B F0| 4C 8B F2| 48 8B 98 ?? ?? 00 00| 48 85 DB|"));
     }
 
     /* Identifiable by being used for DLSS initialization when the upscale type == 2,

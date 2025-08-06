@@ -1,9 +1,9 @@
-﻿using Dalamud.Game.ClientState.Keys;
+﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Game.Config;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
-using ImGuiNET;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -113,7 +113,7 @@ public sealed unsafe class Plugin : IDalamudPlugin
         if (size.HotkeyKey != VirtualKey.NO_KEY)
         {
             var io = ImGui.GetIO();
-            var keyPressedIm = ImGuiNative.igIsKeyPressed((ImGuiKey) size.HotkeyKey, 0) != 0;
+            var keyPressedIm = ImGuiNative.IsKeyPressed((ImGuiKey) size.HotkeyKey, 0) != 0;
             var keyDownXiv = Service.KeyState.GetRawValue(size.HotkeyKey) != 0;
 
             if ((keyPressedIm || (keyDownXiv && !size.HotkeyKeyDown)) &&

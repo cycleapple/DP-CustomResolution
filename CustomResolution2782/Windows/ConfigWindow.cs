@@ -1,7 +1,7 @@
-﻿using Dalamud.Game.ClientState.Keys;
+﻿using Dalamud.Bindings.ImGui;
+using Dalamud.Game.ClientState.Keys;
 using Dalamud.Interface.Utility.Raii;
 using Dalamud.Interface.Windowing;
-using ImGuiNET;
 using System;
 using System.Linq;
 using System.Numerics;
@@ -53,7 +53,7 @@ public class ConfigWindow : Window, IDisposable
 
         using (ImRaii.Disabled())
         {
-            ImGui.InputInt2("Window size", ref _displayCurrentWindowWH[0]);
+            ImGui.InputInt("Window size", _displayCurrentWindowWH.AsSpan());
         }
 
         using (var imTabBar = ImRaii.TabBar("MalfunctionMainTabs"))
@@ -98,7 +98,7 @@ Changed via /cres");
 
         using (ImRaii.Disabled())
         {
-            ImGui.InputInt2("Current size", ref _displayCurrentWH[0]);
+            ImGui.InputInt("Current size", _displayCurrentWH.AsSpan());
         }
 
         DrawSizeTabShared(ref _.Display, "Display");
@@ -113,7 +113,10 @@ Changed via /cres");
         {
             unsafe
             {
-                ImGui.InputInt2("Size in pixels", ref _.Display.WH[0]);
+                fixed (int* ptr = &_.Display.WH[0])
+                {
+                    ImGui.InputInt("Size in pixels", new Span<int>(&ptr, 2));
+                }
             }
         }
 
@@ -179,7 +182,7 @@ Click here to reset to FSR and fix the scaling slider.##FixDLSS"))
 
         using (ImRaii.Disabled())
         {
-            ImGui.InputInt2("Current size", ref _displayCurrentGameWH[0]);
+            ImGui.InputInt("Current size", _displayCurrentGameWH.AsSpan());
         }
 
         DrawSizeTabShared(ref _.Game, "Game", scaleOnly: true);
