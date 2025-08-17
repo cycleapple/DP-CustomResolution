@@ -482,7 +482,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         bool called = false;
 
         // TODO: Identifying by the shader might be much more reliable long-term.
-        if (ps->Shader.SamplerCount >= 1 && (data[0].Texture == rtm->GameplayTextureUnk1 || data[0].Texture == rtm->GameplayTextureUnk3))
+        if (ps->SamplerCount >= 1 && (data[0].Texture == rtm->GameplayTextureUnk1 || data[0].Texture == rtm->GameplayTextureUnk3))
         {
             // Service.PluginLog.Debug($"ImmediateBind{(isPS ? "PS" : "CS")}SRVs #{_drawCount} 0x{(long) (nint) ps}");
             var tex = data[0].Texture;
