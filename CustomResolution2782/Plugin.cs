@@ -4,6 +4,7 @@ using Dalamud.Game.Config;
 using Dalamud.Interface.ImGuiNotification;
 using Dalamud.Plugin;
 using Dalamud.Plugin.Services;
+using FloppyUtils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -22,6 +23,8 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public Plugin(IDalamudPluginInterface pluginInterface)
     {
+        FService.Init(this, pluginInterface);
+
         pluginInterface.Create<Service>();
 
         Service.Plugin = this;

@@ -939,6 +939,13 @@
           "System.Threading": "4.3.0",
           "System.Xml.ReaderWriter": "4.3.0"
         }
+      },
+      "floppyutils": {
+        "type": "Project",
+        "dependencies": {
+          "DalamudPackager": "[13.0.0, )",
+          "SharpDX.Direct3D11": "[4.2.0, )"
+        }
       }
     }
   }
