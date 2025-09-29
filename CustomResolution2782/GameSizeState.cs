@@ -4,6 +4,8 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Render;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FloppyUtils;
+using FloppyUtils.Graphics;
+using FloppyUtils.StructEx.Graphics;
 using SharpDX;
 using System;
 using System.Diagnostics;
@@ -15,24 +17,13 @@ using SDX11 = SharpDX.Direct3D11;
 
 namespace CustomResolution;
 
-public unsafe class GameSizeState : IDisposable
+public unsafe sealed class GameSizeState : GameDrawHooks
 {
-    private StringBuilder _dbg = new();
-    private Hook<RTMApplyScaling> _rtmApplyScalingHook;
-    private Hook<RTMDestroyAfterResize> _rtmDestroyAfterResizeHook;
-    private Hook<RTMRegenAfterResize> _rtmRegenAfterResizeHook;
-    private Hook<ImmediateProcessCommands> _immediateProcessCommandsHook;
-    private Hook<TaskRenderGraphicsRender> _taskRenderGraphicsRenderHook;
-    private Hook<PrepareTexture> _prepareTextureHook;
-    private Hook<ImmediateBindPSSRVs> _immediateBindPSSRVsHook;
-    private Hook<ImmediateBindCSSRVs> _immediateBindCSSRVsHook;
-    private Hook<CreateTexture2D> _createTexture2DHook;
+    private readonly StringBuilder _dbg = new();
 
-    private SDX11.DeviceContext _d3dctx;
-    private SDX11.Device _d3ddev;
-    private SDX11.SamplerState _samplerMips;
-    private SDX11.SamplerState _samplerPoint;
-    private SDX11.SamplerState _samplerLinear;
+    private readonly SDX11.SamplerState _samplerMips;
+    private readonly SDX11.SamplerState _samplerPoint;
+    private readonly SDX11.SamplerState _samplerLinear;
 
     private bool _wasEnabled = false;
     private object _renderLock = new();
@@ -45,14 +36,6 @@ public unsafe class GameSizeState : IDisposable
 
     public GameSizeState()
     {
-        var pfx = PostEffectManagerEx.Instance();
-        Service.PluginLog.Debug($"PostEffectManager: 0x{(long) (nint) pfx:X16}");
-        Service.PluginLog.Info($"DLSS: {(pfx->DLSS != null ? "Available" : "Unavailable")}");
-
-        var dev = (DeviceEx*) Device.Instance();
-        _d3dctx = CppObject.FromPointer<SDX11.DeviceContext>((nint) dev->D3D11DeviceContext);
-        _d3ddev = _d3dctx.Device;
-
         var samplerDesc = SDX11.SamplerStateDescription.Default();
         samplerDesc.Filter = SDX11.Filter.MinMagMipLinear;
         samplerDesc.AddressU = SDX11.TextureAddressMode.Mirror;
@@ -68,115 +51,7 @@ public unsafe class GameSizeState : IDisposable
         samplerDesc.Filter = SDX11.Filter.MinMagLinearMipPoint;
         _samplerLinear = new(_d3ddev, samplerDesc);
 
-        /* Writes DynamicResolutionTargetHeight to size[1] near the end,
-         * but if in (gpose || main menu), only scale < 1??
-         */
-        _rtmApplyScalingHook = Service.GameInteropProvider.HookFromAddress<RTMApplyScaling>(
-            // Function
-            Service.SigScanner.ScanText("48 89 5C 24 18 55 56 57 41 56 41 57 48 83 EC 20 8B 42 04 0F 57 C0 48 8B")
-                // Call site, currently unknown what exactly it belongs to
-                .Verify(Service.SigScanner.ScanRVASig(new("48 89 5C 24 48| 45 33 C0| 48 8B 1D ?? ?? ?? ??| 48 8B F1| 48 89 6C 24 50| 4C 89 74 24 20| 4C 8D B1 28 04 00 00| 49 8B D6| 48 8B 83 8C 00 00 00| 49 89 06| (E8 *95 08 00 00)| 48 8B 05 ?? ?? ?? ??| B9 01 00 00 00| 0F B6 50 33| 41 8B 06|"))),
-            RTMApplyScalingDetour
-        );
-        _rtmApplyScalingHook.Enable();
-
-        /* Device.RequestResolutionChange and other triggers run some callbacks, namely
-         * (at the time of 7.2) 0x40 for RTM destruction and 0x48 for RTM reconstruction,
-         * registered in RTM init and run in PostTick.
-         *
-         * RenderTargetManager.Initialize calls subroutines to install those callbacks.
-         *
-         * We don't care about destruction as much because its behavior is unchanged, but
-         * we do want to call it instead of triggering a slow full game resize,
-         * which causes some annoyances with ReShade and possibly other external factors too.
-         *
-         * We care about reconstruction so that we can force the game to create larger RTs.
-         * It's most notable for not being called directly (only via a shim that gets icalled),
-         * and for being in the stack trace when dxgi updates the RT ptrs.
-         */
-        var rtmCallbacks = new MultiRVASig("89 81 2C 04 00 00| B8 56 55 55 55| 41 F7 E8| 45 33 C0| 8B C2| C1 E8 1F| 03 D0| 66 89 91 F6 06 00 00| 48 8D 15 ?? ?? ?? ??| 48 8B CB| E8 ?? ?? ?? ??| 45 33 C0| 89 87 60 04 00 00| 48 8D 15 ?? ?? ?? ??| 48 8B CB| E8 ?? ?? ?? ??| 45 33 C0| 89 87 64 04 00 00| (48 8D 15 *?? ?? ?? ??)| 48 8B CB| E8 ?? ?? ?? ??| 45 33 C0| 89 87 68 04 00 00| (48 8D 15 *?? ?? ?? ??)| 48 8B CB| E8 ?? ?? ?? ??| 89 87 6C 04 00 00| 41 BD 01 00 00 00| 48 8B 15 ?? ?? ?? ??| 41 8B CD| 41 BF 50 14 00 00| C7 44 24 28 03 00 00 00| 41 B9 50 82 00 00| C7 44 24 20 08 00 00 00| 45 8B C5| 0F B6 42 33| 2B C8|");
-        _rtmDestroyAfterResizeHook = Service.GameInteropProvider.HookFromAddress<RTMDestroyAfterResize>(
-            dev->RenderTargetManagerResizeDestroyCallback->Slots[0].Function.Verify(Service.SigScanner.ScanRVASig(rtmCallbacks.Sigs[0])),
-            RTMDestroyAfterResizeDetour
-        );
-        _rtmDestroyAfterResizeHook.Enable();
-        _rtmRegenAfterResizeHook = Service.GameInteropProvider.HookFromAddress<RTMRegenAfterResize>(
-            dev->RenderTargetManagerResizeRegenCallback->Slots[0].Function.Verify(Service.SigScanner.ScanRVASig(rtmCallbacks.Sigs[1])),
-            RTMRegenAfterResizeDetour
-        );
-        _rtmRegenAfterResizeHook.Enable();
-
-        /* ImmediateContextDX11.ProcessCommands can run in either DeviceX11.PostTick,
-         * or in RenderThread.Run, which is prone to race conditions and crashes with manual RTM regen.
-         * While we can regen RTMs after ProcessCommands is done, it would still leave us
-         * with some other race conditions regarding the fields we modify.
-         * Let's wrap it in a C# lock and call it a day...
-         *
-         * Identifiable by being called by DeviceDX11.PostTick and RenderThread.Run
-         */
-        _immediateProcessCommandsHook = Service.GameInteropProvider.HookFromAddress<ImmediateProcessCommands>(
-            // DeviceX11.PostTick call site
-            Service.SigScanner.ScanRVASig(new("8B 86 88 00 00 00| 85 C0| 75 0C| C7 86 88 00 00 00 01 00 00 00| EB 05| 83 F8 01| 75 1A| 44 8B 86 10 09 00 00| 48 8B 96 08 09 00 00| 48 8B 8E C0 0A 0E 00| (E8 *?? ?? ?? ??)| 48 8B 8E B0 0A 0E 00| 48 8B 01| FF 90 70 03 00 00| 83 BE 88 00 00 00 01| 75 47|"))
-                // RenderThread.Run call site
-                .Verify(Service.SigScanner.ScanRVASig(new("48 8B 4B 28| BA FF FF FF FF| FF 15 ?? ?? ?? ??| 0F B6 43 20| 84 C0| 75 3C| 48 8B 0D ?? ?? ?? ??| 83 B9 88 00 00 00 01| 75 1A| 44 8B 81 10 09 00 00| 48 8B 91 08 09 00 00| 48 8B 89 C0 0A 0E 00| (E8 *9E F1 FF FF) 48 8B 4B 30| FF 15 ?? ?? ?? ??|"))),
-            ImmediateProcessCommandsDetour
-        );
-        _immediateProcessCommandsHook.Enable();
-
-        /* TaskRenderGraphicsRender has got a prio of 0x1F and seems to be the only task with that prio.
-         * Hooking this is relevant for post-processing, and can be validated easily by enabling TSCMAA at >1x scale.
-         */
-        Task* taskRenderGraphicsRenderTask = null;
-        for (var task = &TaskManager.Instance()->TaskList[0x1F].Task; task != null; task = task->Next)
-        {
-            if (task->Runner != null)
-            {
-                taskRenderGraphicsRenderTask = task;
-                break;
-            }
-        }
-        // TODO: Add pointer verification
-        Service.PluginLog.Debug($"TaskRenderGraphicsRender Task @ 0x{(long) taskRenderGraphicsRenderTask:X16} -> 0x{(long) (nint) taskRenderGraphicsRenderTask->Func:X16}");
-        _taskRenderGraphicsRenderHook = Service.GameInteropProvider.HookFromAddress<TaskRenderGraphicsRender>(
-            taskRenderGraphicsRenderTask->Func,
-            TaskRenderGraphicsRenderDetour
-        );
-        _taskRenderGraphicsRenderHook.Enable();
-
-        /* Texture preparation used in a lot of places, but most notable for
-         * writing to the mip level count of the gameplay texture and also updating the D3D11 ptrs.
-         */
-        _prepareTextureHook = Service.GameInteropProvider.HookFromAddress<PrepareTexture>(
-            Service.SigScanner.ScanRVASig(new("48 8D 4B 20| E8 ?? ?? ?? ??| 48 89 5F 58| 48 8B 4D A7| 48 85 C9| 74 0A| 48 8B 01| FF 50 10| 4C 89 65 A7| 44 38 67 48| 74 4E| 48 8B 4F 60| 48 8D 57 38| 44 8B 4F 4C| 41 B8 01 00 00 00| 48 85 C9| 74 0B| (E8 *?? ?? ?? ??)| 84 C0| 75 2E| EB 8E| 8B 47 50| 48 8B 0D ?? ?? ?? ??| 0F BA E8 15| C7 44 24 28 01 00 00 00| 89 44 24 20| E8 ?? ?? ?? ??| 48 85 C0|"))
-                .Verify(Service.SigScanner.ScanRVASig(new("48 89 9C 24 C8 00 00 00| 49 8D 95 8C 00 00 00| 48 8B 02| 48 8D 99| 28 04 00 00| 48 89 B4 24 D0 00 00 00| 48 89 03| 48 8B 05 ?? ?? ?? ??| 4C 89 A4 24 D8 00 00 00| 4C 89 B4 24 98 00 00 00| 4C 89 BC 24 90 00 00 00| 80 78 7A 00| 74 20| 48 8B 89 70 03 00 00| 48 85 C9| 74 14| 45 33 C9| 45 8D 41 01| (E8 *?? ?? ?? ??)| 84 C0| 0F 84 07 01 00 00|"))),
-            PrepareTextureDetour
-        );
-        _prepareTextureHook.Enable();
-
-        /* The shader resource view of GameplayTexture gets read by these two.
-         * The two functions should be identical with similar usage patterns, but read data from different offsets.
-         * (This trips up some signature scripts for Ghidra, such as Sigga.)
-         */
-        // TODO: Add pointer verification
-        _immediateBindPSSRVsHook = Service.GameInteropProvider.HookFromAddress<ImmediateBindPSSRVs>(
-            Service.SigScanner.ScanText("48 8B C4 4C 89 40 18 48 89 48 08 53 56 48 83 EC 68 44 8B 5A 44 48 8D B1 E8 03 00 00 4C 89 68 D8").Log(),
-            ImmediateBindPSSRVsDetour
-        );
-        _immediateBindPSSRVsHook.Enable();
-        _immediateBindCSSRVsHook = Service.GameInteropProvider.HookFromAddress<ImmediateBindCSSRVs>(
-            Service.SigScanner.ScanText("48 8B C4 4C 89 40 18 48 89 48 08 53 56 48 83 EC 68 44 8B 5A 44 48 8D B1 E8 13 00 00 4C 89 68 D8").Log(),
-            ImmediateBindCSSRVsDetour
-        );
-        _immediateBindCSSRVsHook.Enable();
-
-        /* And because all that isn't bad enough:
-         * Hook CreateTexture2D to forcibly set the mipmap generation flag.
-         */
-        _createTexture2DHook = Service.GameInteropProvider.HookFromAddress<CreateTexture2D>(
-            ((ID3D11Device*) _d3ddev.NativePointer)->lpVtbl[5],
-            CreateTexture2DDetour
-        );
-        _createTexture2DHook.Enable();
+        Enable();
     }
 
     public bool ConfigDynRezo { get; private set; }
@@ -188,54 +63,16 @@ public unsafe class GameSizeState : IDisposable
 
     public string DebugInfo => _dbg.ToString();
 
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void RTMApplyScaling(RenderTargetManagerEx* rtm, uint* size, byte unk1);
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate byte RTMDestroyAfterResize();
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void RTMRegenAfterResize();
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void ImmediateProcessCommands(ImmediateContext* ctx, RenderCommandBufferGroup* cmds, uint count);
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void DDX11PostTick(DeviceEx* dev);
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void TaskRenderGraphicsRender();
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate ulong PrepareTexture(Texture* tex, uint* size, byte mips, uint format);
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void ImmediateBindPSSRVs(ImmediateContextEx* im, PixelShader* ps, ImmediateSRV* data);
-
-    // [UnmanagedFunctionPointer(CallingConvention.FastCall)]
-    private delegate void ImmediateBindCSSRVs(ImmediateContextEx* im, Shader* cs, ImmediateSRV* data);
-
-    private delegate int CreateTexture2D(ID3D11Device* d3ddev, D3D11_TEXTURE2D_DESC* desc, D3D11_SUBRESOURCE_DATA* initialData, ID3D11Texture2D** tex);
-
-    public void Dispose()
+    protected override void DisposeD3D(bool disposing)
     {
-        _rtmApplyScalingHook.Dispose();
-        _rtmDestroyAfterResizeHook.Dispose();
-        _rtmRegenAfterResizeHook.Dispose();
-        _immediateProcessCommandsHook.Dispose();
-        _taskRenderGraphicsRenderHook.Dispose();
-        _prepareTextureHook.Dispose();
-        _immediateBindPSSRVsHook.Dispose();
-        _immediateBindCSSRVsHook.Dispose();
-        _createTexture2DHook.Dispose();
         lock (_renderLock)
         {
             _samplerLinear.Dispose();
             _samplerPoint.Dispose();
             _samplerMips.Dispose();
         }
-        _d3ddev.Dispose();
-        Service.Framework.RunOnFrameworkThread(Update);
+
+        base.DisposeD3D(disposing);
     }
 
     public void SetConfigGraphicsRezoType(ResolutionScalingMode mode)
@@ -366,14 +203,14 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         widthS = (width * heightS) / height;
     }
 
-    private void RTMApplyScalingDetour(RenderTargetManagerEx* rtm, uint* size, byte unk1)
+    protected override void RTMApplyScalingDetour(RenderTargetManagerEx* rtm, uint* size, byte unk1)
     {
         Debug.Assert(rtm == RenderTargetManager.Instance());
 
         ref var cfg = ref Service.Config._.Game;
         if (Service.Plugin.Unloading || !cfg.IsEnabled)
         {
-            _rtmApplyScalingHook.OriginalDisposeSafe(rtm, size, unk1);
+            base.RTMApplyScalingDetour(rtm, size, unk1);
             return;
         }
 
@@ -382,34 +219,34 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         gfx->DynamicRezoEnableBeyond1 = (byte) (cfg.Scale > 1f ? 1 : 0);
 
         Service.PluginLog.Debug($"Applying scaling, before: {size[0]} {size[1]} {unk1}");
-        _rtmApplyScalingHook.OriginalDisposeSafe(rtm, size, unk1);
+        base.RTMApplyScalingDetour(rtm, size, unk1);
         Service.PluginLog.Debug($"Applying scaling, after: {size[0]} {size[1]} {unk1}");
 
         gfx->DynamicRezoEnableBeyond1 = _DynamicRezoEnableBeyond1;
     }
 
-    private byte RTMDestroyAfterResizeDetour()
+    protected override byte RTMDestroyAfterResizeDetour()
     {
         ref var cfg = ref Service.Config._.Game;
         if (Service.Plugin.Unloading || !cfg.IsEnabled)
         {
-            return _rtmDestroyAfterResizeHook.OriginalDisposeSafe();
+            return base.RTMDestroyAfterResizeDetour();
         }
 
         var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
 
         Service.PluginLog.Debug($"Destroying RTM resources");
-        byte rv = _rtmDestroyAfterResizeHook.OriginalDisposeSafe();
+        byte rv = base.RTMDestroyAfterResizeDetour();
         Service.PluginLog.Debug($"After: {rv} 0x{(long) (nint) rtm->GameplayTextureUnk1->D3D11Texture2D:X16} 0x{(long) (nint) rtm->GameplayTextureUnk3->D3D11Texture2D:X16}");
         return rv;
     }
 
-    private void RTMRegenAfterResizeDetour()
+    protected override void RTMRegenAfterResizeDetour()
     {
         ref var cfg = ref Service.Config._.Game;
         if (Service.Plugin.Unloading || !cfg.IsEnabled)
         {
-            _rtmRegenAfterResizeHook.OriginalDisposeSafe();
+            base.RTMRegenAfterResizeDetour();
             return;
         }
 
@@ -418,43 +255,43 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
         using var scale = new ScaleState();
         Service.PluginLog.Debug($"Regenerating RTM resources: {dev->Width} x {dev->Height}");
-        _rtmRegenAfterResizeHook.OriginalDisposeSafe();
+        base.RTMRegenAfterResizeDetour();
         Service.PluginLog.Debug($"After: 0x{(long) (nint) rtm->GameplayTextureUnk1->D3D11Texture2D:X16} 0x{(long) (nint) rtm->GameplayTextureUnk3->D3D11Texture2D:X16}");
     }
 
-    private void ImmediateProcessCommandsDetour(ImmediateContext* ctx, RenderCommandBufferGroup* cmds, uint count)
+    protected override void ImmediateProcessCommandsDetour(ImmediateContextEx* ctx, RenderCommandBufferGroup* cmds, uint count)
     {
         _drawCount = 0;
         // Service.PluginLog.Debug("--- ImmediateProcessCommands ---");
 
         lock (_renderLock)
         {
-            _immediateProcessCommandsHook.OriginalDisposeSafe(ctx, cmds, count);
+            base.ImmediateProcessCommandsDetour(ctx, cmds, count);
         }
     }
 
-    private void TaskRenderGraphicsRenderDetour()
+    protected override void TaskRenderGraphicsRenderDetour()
     {
         ref var cfg = ref Service.Config._.Game;
         if (Service.Plugin.Unloading || !cfg.IsEnabled)
         {
-            _taskRenderGraphicsRenderHook.OriginalDisposeSafe();
+            base.TaskRenderGraphicsRenderDetour();
             return;
         }
 
         lock (_renderLock)
         {
             using var scale = new ScaleState();
-            _taskRenderGraphicsRenderHook.OriginalDisposeSafe();
+            base.TaskRenderGraphicsRenderDetour();
         }
     }
 
-    private ulong PrepareTextureDetour(Texture* tex, uint* size, byte mips, uint format)
+    protected override ulong PrepareTextureDetour(Texture* tex, uint* size, byte mips, uint format)
     {
         var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
         if (tex != rtm->GameplayTextureUnk1 && tex != rtm->GameplayTextureUnk3)
         {
-            return _prepareTextureHook.OriginalDisposeSafe(tex, size, mips, format);
+            return base.PrepareTextureDetour(tex, size, mips, format);
         }
 
         ref var cfg = ref Service.Config._;
@@ -465,17 +302,16 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         }
 
         Service.PluginLog.Debug($"Preparing gameplay texture 0x{(long) (nint) tex:X16} with {mips} mips, currently 0x{(long) (nint) tex->D3D11Texture2D:X16}");
-        var rv = _prepareTextureHook.OriginalDisposeSafe(tex, size, mips, format);
+        var rv = base.PrepareTextureDetour(tex, size, mips, format);
         Service.PluginLog.Debug($"After: 0x{rv:X16} 0x{(long) (nint) tex->D3D11Texture2D:X16} 0x{(long) (nint) tex->D3D11ShaderResourceView:X16}");
         return rv;
     }
 
-    private void ImmediateBindPSCSSRVsDetourCommon(
+    protected override void ImmediateBindPSCSSRVsDetourCommon(
         bool isPS,
         SDX11.CommonShaderStage stage,
         ImmediateContextEx* im, PixelShader* ps, ImmediateSRV* data
-    )
-    {
+    ) {
         Debug.Assert(im == Device.Instance()->ImmediateContext);
 
         var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
@@ -527,33 +363,16 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
             called = true;
             _drawCount++;
 
-            if (isPS)
-            {
-                _immediateBindPSSRVsHook.OriginalDisposeSafe(im, ps, data);
-            }
-            else
-            {
-                _immediateBindCSSRVsHook.OriginalDisposeSafe(im, (Shader*) ps, data);
-            }
+            base.ImmediateBindPSCSSRVsDetourCommon(isPS, stage, im, ps, data);
         }
     }
 
-    private void ImmediateBindPSSRVsDetour(ImmediateContextEx* im, PixelShader* ps, ImmediateSRV* data)
-    {
-        ImmediateBindPSCSSRVsDetourCommon(true, _d3dctx.PixelShader, im, ps, data);
-    }
-
-    private void ImmediateBindCSSRVsDetour(ImmediateContextEx* im, Shader* cs, ImmediateSRV* data)
-    {
-        ImmediateBindPSCSSRVsDetourCommon(false, _d3dctx.ComputeShader, im, (PixelShader*) cs, data);
-    }
-
-    private int CreateTexture2DDetour(ID3D11Device* d3ddev, D3D11_TEXTURE2D_DESC* desc, D3D11_SUBRESOURCE_DATA* initialData, ID3D11Texture2D** tex)
+    protected override int CreateTexture2DDetour(ID3D11Device* d3ddev, D3D11_TEXTURE2D_DESC* desc, D3D11_SUBRESOURCE_DATA* initialData, ID3D11Texture2D** tex)
     {
         var rtm = (RenderTargetManagerEx*) RenderTargetManager.Instance();
         if (tex != &rtm->GameplayTextureUnk1->D3D11Texture2D && tex != &rtm->GameplayTextureUnk3->D3D11Texture2D)
         {
-            return _createTexture2DHook.OriginalDisposeSafe(d3ddev, desc, initialData, tex);
+            return base.CreateTexture2DDetour(d3ddev, desc, initialData, tex);
         }
 
         if (rtm->GameplayTextureUnk1->MipLevel != 1)
@@ -561,7 +380,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
             desc->MiscFlags |= (uint) D3D11_RESOURCE_MISC_FLAG.D3D11_RESOURCE_MISC_GENERATE_MIPS;
         }
 
-        return _createTexture2DHook.OriginalDisposeSafe(d3ddev, desc, initialData, tex);
+        return base.CreateTexture2DDetour(d3ddev, desc, initialData, tex);
     }
 
     private enum ForceUpdateRTMState
@@ -594,116 +413,3 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         }
     }
 }
-
-
-[StructLayout(LayoutKind.Explicit)]
-public unsafe struct GraphicsConfigEx
-{
-    [FieldOffset(0)]
-    public GraphicsConfig _;
-
-    public ref byte DynamicRezoEnable => ref _.DynamicRezoEnable;
-    // Set to 0 in main menu and gpose, preventing scaling beyond 1.
-    public ref byte DynamicRezoEnableBeyond1 => ref RefPtr.For(ref DynamicRezoEnable).Offs<byte>(0x1).Ref;
-    public ref byte DynamicRezoEnableCutScene => ref RefPtr.For(ref DynamicRezoEnable).Offs<byte>(0x2).Ref;
-    public ref byte DynamicRezoEnableUnkx47 => ref RefPtr.For(ref DynamicRezoEnable).Offs<byte>(0x3).Ref;
-    public ref byte DynamicRezoEnableUnkx48 => ref RefPtr.For(ref DynamicRezoEnable).Offs<byte>(0x4).Ref;
-
-    public ref float GraphicsRezoScale => ref _.GraphicsRezoScale;
-    public ref float GraphicsRezoUnk1 => ref RefPtr.For(ref GraphicsRezoScale).Offs<float>(0x4).Ref;
-    public ref byte GraphicsRezoUpscaleType => ref _.GraphicsRezoUpscaleType;
-    public ref byte GraphicsRezoUnk2 => ref RefPtr.For(ref GraphicsRezoUpscaleType).Offs<byte>(0x1).Ref;
-}
-
-// RenderTargetManager is updated very sporadically, and some fields we need flew out.
-// https://github.com/aers/FFXIVClientStructs/commit/589df2aa5cd9c98b4d62269034cd6da903f49b5f#diff-8e7d9b03cb91cb07a8d7b463b5be4672793a328703bde393e7acd890822a72cf
-[StructLayout(LayoutKind.Explicit)]
-public unsafe struct RenderTargetManagerEx
-{
-    [FieldOffset(0)]
-    public RenderTargetManager _;
-
-    // Title screen: Gets blitted FROM after actual gameplay texture. Actual purpose unknown.
-    // In-game outdoors: Gets blitted to backbuffer.
-    [FieldOffset(0x68)]
-    public Texture* GameplayTextureUnk1;
-
-    // Gets blitted TO after actual gameplay texture, using Unk1. Actual purpose unknown.
-    [FieldOffset(0x100)]
-    public Texture* GameplayTextureUnk2;
-
-    // Title screen: Gets blitted to backbuffer.
-    // In-game outdoors: Totally unknown.
-    [FieldOffset(0x258)]
-    public Texture* GameplayTextureUnk3;
-
-    [FieldOffset(0x428)]
-    public uint Resolution_Width;
-    [FieldOffset(0x428 + 0x4)]
-    public uint Resolution_Height;
-
-    [FieldOffset(0x6F0 + 2 * 0)]
-    public ushort DynamicResolutionActualTargetHeight;
-    [FieldOffset(0x6F0 + 2 * 1)]
-    public ushort DynamicResolutionTargetHeight;
-    [FieldOffset(0x6F0 + 2 * 2)]
-    public ushort DynamicResolutionMaximumHeight;
-    [FieldOffset(0x6F0 + 2 * 3)]
-    public ushort DynamicResolutionMinimumHeight;
-
-    [FieldOffset(0x70C + 4 * 0)]
-    public float GraphicsRezoScalePrev;
-    [FieldOffset(0x70C + 4 * 1)]
-    public float GraphicsRezoScaleGlassX;
-    [FieldOffset(0x70C + 4 * 2)]
-    public float GraphicsRezoScaleGlassY;
-    [FieldOffset(0x70C + 4 * 3)]
-    public float GraphicsRezoScaleUnk1;
-    [FieldOffset(0x70C + 4 * 4)]
-    public float GraphicsRezoScaleUnk2;
-}
-
-[StructLayout(LayoutKind.Explicit, Size = 0x18)]
-public unsafe struct ImmediateSRV
-{
-    // D3D11ShaderResourceView must be at 0x58 + (GlobalIndex % 3) * 8
-    // Smells like something swapchain-adjacent, but have yet to analyze anything with != null.
-    [FieldOffset(0x0)]
-    public nint Unkx0;
-
-    [FieldOffset(0x8)]
-    public Texture* Texture;
-
-    [FieldOffset(0x10)]
-    public uint Unkx10;
-
-    [FieldOffset(0x14)]
-    public uint Unkx14;
-}
-
-// There's currently no effort to C#-ify the PostEffectManager findings in CS.
-[StructLayout(LayoutKind.Explicit)]
-public unsafe struct PostEffectManagerEx
-{
-    private static PostEffectManagerEx* _instance;
-
-    public static PostEffectManagerEx* Instance()
-    {
-        if (Service.SigScanner is null)
-        {
-            return null;
-        }
-        
-        return _instance = (PostEffectManagerEx*) *(nint*) Service.SigScanner.ScanRVASig(new("48 83 EC ??| (48 8B 05 *?? ?? ?? ??)| 49 8B F9| 49 8B F0| 4C 8B F2| 48 8B 98 ?? ?? 00 00| 48 85 DB|"));
-    }
-
-    /* Identifiable by being used for DLSS initialization when the upscale type == 2,
-     * and containing NVSDK NGX capability param attribs at *+0x158 since 2024?
-     * The function setting it up is very similar to NVIDIA's sample code,
-     * but in case of emergency, CTRL+F NVSDK_NGX_D3D11_GetCapabilityParameters (always exported?)
-     * and the two magic strings "SuperSampling.NeedsUpdatedDriver" and "SuperSampling.Available"
-     */
-    [FieldOffset(0x4220)]
-    public void* DLSS;
-}
-

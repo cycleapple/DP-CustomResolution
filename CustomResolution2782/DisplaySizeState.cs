@@ -3,6 +3,7 @@ using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.Interop;
 using FloppyUtils;
+using FloppyUtils.StructEx.Graphics;
 using System;
 using System.Runtime.InteropServices;
 using System.Text;
@@ -391,77 +392,3 @@ public enum ForceSizeMode
     /// </summary>
     LegacyRequestResolutionChange = 1
 }
-
-[StructLayout(LayoutKind.Explicit)]
-public unsafe struct DeviceEx
-{
-    [FieldOffset(0)]
-    public Device _;
-
-    [FieldOffset(0x40)]
-    public DeviceCallbacks* RenderTargetManagerResizeDestroyCallback;
-    [FieldOffset(0x48)]
-    public DeviceCallbacks* RenderTargetManagerResizeRegenCallback;
-
-    public ref byte RequestResolutionChange => ref _.RequestResolutionChange;
-
-    public ref byte RequestResolutionChangeUnk1 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x1).Ref;
-    public ref byte RequestResolutionChangeUnk2 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x2).Ref;
-    public ref byte RequestResolutionChangeUnk3 => ref RefPtr.For(ref _.RequestResolutionChange).Offs<byte>(0x3).Ref;
-
-    public ref uint RequestRender => ref RefPtr.For(ref _.Width).Offs<uint>(-0x4).Ref;
-
-    public ref uint Width => ref _.Width;
-
-    public ref uint Height => ref _.Height;
-
-    public ref void* hWnd => ref _.hWnd;
-
-    public ref uint NewWidth => ref _.NewWidth;
-
-    public ref uint NewHeight => ref _.NewHeight;
-
-    // C# doesn't let us use ptr types as generic arguments, oh well.
-    public readonly ID3D11DeviceContext* D3D11DeviceContext => (ID3D11DeviceContext*) _.D3D11DeviceContext;
-    public readonly ImmediateContextEx* ImmediateContext => (ImmediateContextEx*) _.ImmediateContext;
-}
-
-// ImmediateContextEx in FFXIVClientStructs is a bare minimum.
-// https://github.com/aers/FFXIVClientStructs/blob/ef5e9a5997671fb2c9a72cb9d57d841855f62085/FFXIVClientStructs/FFXIV/Client/Graphics/Kernel/ImmediateContext.cs
-[StructLayout(LayoutKind.Explicit)]
-public unsafe struct ImmediateContextEx
-{
-    [FieldOffset(0)]
-    public ImmediateContext _;
-
-    [FieldOffset(0x18)]
-    public nint IfNonZeroSkipPostTickProcess;
-}
-
-
-[StructLayout(LayoutKind.Explicit)]
-public unsafe struct DeviceCallbacks
-{
-    [FieldOffset(0x8)]
-    public CRITICAL_SECTION* Lock;
-
-    [FieldOffset(0x30)]
-    public DeviceCallbackSlot* Slots;
-
-    [FieldOffset(0x38)]
-    public uint MaxCount;
-
-    [FieldOffset(0x3c)]
-    public uint Count;
-}
-
-[StructLayout(LayoutKind.Explicit)]
-public unsafe struct DeviceCallbackSlot
-{
-    [FieldOffset(0x0)]
-    public nint Function;
-
-    [FieldOffset(0x8)]
-    public nint Context;
-}
-

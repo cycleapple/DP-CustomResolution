@@ -1,4 +1,5 @@
 ﻿using Dalamud.Game.ClientState.Keys;
+using FloppyUtils.StructEx.Graphics;
 using System.Collections.Generic;
 using System.Reflection;
 
