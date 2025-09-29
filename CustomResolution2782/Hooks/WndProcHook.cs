@@ -1,4 +1,5 @@
 ﻿using CustomResolution.WndProcHookManagerProxyApi;
+using FloppyUtils;
 using System;
 using System.Linq;
 using System.Reflection.Emit;
@@ -105,7 +106,7 @@ public sealed unsafe class WndProcHook : IDisposable
 
     private void InvokePre(WndProcEventArgs args)
     {
-        if (Service.Plugin.Unloading)
+        if (FService.Unloading)
         {
             return;
         }
@@ -184,7 +185,7 @@ public sealed unsafe class WndProcHook : IDisposable
 
     private void InvokePost(WndProcEventArgs args)
     {
-        if (Service.Plugin.Unloading)
+        if (FService.Unloading)
         {
             return;
         }

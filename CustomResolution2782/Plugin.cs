@@ -59,14 +59,12 @@ public sealed unsafe class Plugin : IDalamudPlugin
 
     public string Name => "CustomResolution";
 
-    public bool Unloading { get; private set; } = false;
-
     public int LagsTotal { get; private set; } = 0;
     public bool Lag { get; private set; } = false;
 
     public void Dispose()
     {
-        Unloading = true;
+        using var floppyServiceDispose = FService.BeginDispose();
 
         lock (_disposeLock)
         {

@@ -112,7 +112,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 ");
         }
 
-        bool unloading = Service.Plugin.Unloading;
+        bool unloading = FService.Unloading;
         bool enabled = !unloading && cfg.IsEnabled;
 
         if (enabled || _wasEnabled)
@@ -208,7 +208,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
         Debug.Assert(rtm == RenderTargetManager.Instance());
 
         ref var cfg = ref Service.Config._.Game;
-        if (Service.Plugin.Unloading || !cfg.IsEnabled)
+        if (FService.Unloading || !cfg.IsEnabled)
         {
             base.RTMApplyScalingDetour(rtm, size, unk1);
             return;
@@ -228,7 +228,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
     protected override byte RTMDestroyAfterResizeDetour()
     {
         ref var cfg = ref Service.Config._.Game;
-        if (Service.Plugin.Unloading || !cfg.IsEnabled)
+        if (FService.Unloading || !cfg.IsEnabled)
         {
             return base.RTMDestroyAfterResizeDetour();
         }
@@ -244,7 +244,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
     protected override void RTMRegenAfterResizeDetour()
     {
         ref var cfg = ref Service.Config._.Game;
-        if (Service.Plugin.Unloading || !cfg.IsEnabled)
+        if (FService.Unloading || !cfg.IsEnabled)
         {
             base.RTMRegenAfterResizeDetour();
             return;
@@ -273,7 +273,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
     protected override void TaskRenderGraphicsRenderDetour()
     {
         ref var cfg = ref Service.Config._.Game;
-        if (Service.Plugin.Unloading || !cfg.IsEnabled)
+        if (FService.Unloading || !cfg.IsEnabled)
         {
             base.TaskRenderGraphicsRenderDetour();
             return;
@@ -296,7 +296,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
         ref var cfg = ref Service.Config._;
 
-        if (!Service.Plugin.Unloading && cfg.Game.IsEnabled && cfg.Game.Scale > 2f)
+        if (!FService.Unloading && cfg.Game.IsEnabled && cfg.Game.Scale > 2f)
         {
             mips = (byte) MathF.Ceiling(MathF.Log2(cfg.Game.Scale));
         }

@@ -120,7 +120,7 @@ public unsafe class DisplaySizeState : IDisposable
         _dbg.Clear();
         _dbgLog = false;
 
-        bool unloading = Service.Plugin.Unloading;
+        bool unloading = FService.Unloading;
 
         ref var cfg = ref Service.Config._.Display;
 
