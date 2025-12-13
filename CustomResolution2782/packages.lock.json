@@ -211,6 +211,15 @@
           "NETStandard.Library": "1.6.1"
         }
       },
+      "SharpDX.D3DCompiler": {
+        "type": "Transitive",
+        "resolved": "4.2.0",
+        "contentHash": "Rnsd6Ilp127xbXqhTit8WKFQUrXwWxqVGpglyWDNkIBCk0tWXNQEjrJpsl0KAObzyZaa33+EXAikLVt5fnd3GA==",
+        "dependencies": {
+          "NETStandard.Library": "1.6.1",
+          "SharpDX": "4.2.0"
+        }
+      },
       "SharpDX.DXGI": {
         "type": "Transitive",
         "resolved": "4.2.0",
@@ -944,6 +953,7 @@
         "type": "Project",
         "dependencies": {
           "DalamudPackager": "[13.0.0, )",
+          "SharpDX.D3DCompiler": "[4.2.0, )",
           "SharpDX.Direct3D11": "[4.2.0, )"
         }
       }

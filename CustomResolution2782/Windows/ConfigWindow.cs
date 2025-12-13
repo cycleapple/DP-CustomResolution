@@ -10,7 +10,7 @@ namespace CustomResolution.Windows;
 
 public class ConfigWindow : Window, IDisposable
 {
-    private VirtualKey[] _validKeys = new VirtualKey[] { VirtualKey.NO_KEY }.Union(Service.KeyState.GetValidVirtualKeys()).ToArray();
+    private readonly VirtualKey[] _validKeys = [.. new VirtualKey[] { VirtualKey.NO_KEY }.Union(Service.KeyState.GetValidVirtualKeys())];
 
     private readonly int[] _displayCurrentWH = new int[2];
     private readonly int[] _displayCurrentWindowWH = new int[2];
@@ -26,7 +26,8 @@ public class ConfigWindow : Window, IDisposable
         UpdateFromConfig();
     }
 
-    public void Dispose() {
+    public void Dispose()
+    {
     }
 
     public void UpdateFromConfig()
