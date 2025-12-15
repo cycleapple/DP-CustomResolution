@@ -1,5 +1,5 @@
 ﻿using Dalamud.IoC;
-using MonoMod.Utils;
+using FloppyUtils;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -16,7 +16,7 @@ public class WndProcHookManager
     private Type? _realManagerType;
 
     private WeakReference? _lastManager;
-    private readonly Dictionary<(Type, string), FastReflectionDelegate> _methodCache = new();
+    private readonly Dictionary<(Type, string), DynamicMethodDelegate> _methodCache = new();
     private readonly Dictionary<(Type, string), MemberInfo> _memberCache = new();
 
     public WndProcHookManager()
@@ -101,14 +101,17 @@ public class WndProcHookManager
         return true;
     }
 
-    internal FastReflectionDelegate GetMethod(Type target, string name, Func<Type, MethodBase>? getMethod = null)
+    internal DynamicMethodDelegate GetMethod(Type target, string name, Func<Type, MethodBase>? getMethod = null)
     {
         if (_methodCache.TryGetValue((target, name), out var fun))
         {
             return fun;
         }
 
-        return _methodCache[(target, name)] = FastReflectionHelper.CreateFastDelegate(getMethod?.Invoke(target) ?? target.GetMethods().FirstOrDefault(m => m.Name == name) ?? target.GetMethod(name, _BindingFlags)!);
+        var method = getMethod?.Invoke(target);
+        method ??= target.GetMethods().FirstOrDefault(m => m.Name == name);
+        method ??= target.GetMethod(name, _BindingFlags)!;
+        return _methodCache[(target, name)] = method.CreateDynamicMethodDelegate();
     }
 
     internal object? InvokeStatic(string typeName, string name, params object?[] args)

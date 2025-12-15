@@ -21,19 +21,10 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <Reference Include="SharpDX">
-      <HintPath>$(DalamudLibPath)SharpDX.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
-    <Reference Include="SharpDX.Mathematics">
-      <HintPath>$(DalamudLibPath)SharpDX.Mathematics.dll</HintPath>
-      <Private>false</Private>
-    </Reference>
     <Reference Include="TerraFX.Interop.Windows">
       <HintPath>$(DalamudLibPath)TerraFX.Interop.Windows.dll</HintPath>
       <Private>false</Private>
     </Reference>
-    <PackageReference Include="SharpDX.Direct3D11" Version="4.2.0" />
   </ItemGroup>
 
   <ItemGroup>

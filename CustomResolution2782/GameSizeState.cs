@@ -6,7 +6,6 @@ using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FloppyUtils;
 using FloppyUtils.Graphics;
 using FloppyUtils.StructEx.Graphics;
-using SharpDX;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
@@ -14,7 +13,6 @@ using System.Text;
 using System.Threading;
 using TerraFX.Interop.DirectX;
 using Device = FFXIVClientStructs.FFXIV.Client.Graphics.Kernel.Device;
-using SDX11 = SharpDX.Direct3D11;
 
 namespace CustomResolution;
 
@@ -31,15 +29,15 @@ public unsafe sealed class GameSizeState
     private readonly Hook<ImmediateBindCSSRVs> _immediateBindCSSRVsHook;
     private readonly Hook<CreateTexture2D> _createTexture2DHook;
 
-    private readonly SDX11.DeviceContext _d3dctx;
-    private readonly SDX11.Device _d3ddev;
+    private readonly ID3D11DeviceContext* _d3dctx;
+    private readonly ID3D11Device* _d3ddev;
 
     private readonly StringBuilder _dbg = new();
     private readonly Lock _renderLock = new();
 
-    private readonly SDX11.SamplerState _samplerMips;
-    private readonly SDX11.SamplerState _samplerPoint;
-    private readonly SDX11.SamplerState _samplerLinear;
+    private readonly ID3D11SamplerState* _samplerMips;
+    private readonly ID3D11SamplerState* _samplerPoint;
+    private readonly ID3D11SamplerState* _samplerLinear;
 
     private bool _wasEnabled = false;
 
@@ -54,8 +52,11 @@ public unsafe sealed class GameSizeState
         FService.PluginLog.Info($"DLSS: {(pfx->DLSS != null ? "Available" : "Unavailable")}");
 
         var dev = (DeviceEx*) Device.Instance();
-        _d3dctx = CppObject.FromPointer<SDX11.DeviceContext>((nint) dev->D3D11DeviceContext);
-        _d3ddev = _d3dctx.Device;
+        _d3dctx = dev->D3D11DeviceContext;
+
+        ID3D11Device* d3ddev;
+        _d3dctx->GetDevice(&d3ddev);
+        _d3ddev = d3ddev;
 
         /* Writes DynamicResolutionTargetHeight to size[1] near the end,
          * but if in (gpose || main menu), only scale < 1??
@@ -153,24 +154,29 @@ public unsafe sealed class GameSizeState
         /* Hook CreateTexture2D to forcibly set the mipmap generation flag.
          */
         _hooks.Add(_createTexture2DHook = FService.GameInteropProvider.HookFromAddress<CreateTexture2D>(
-            ((ID3D11Device*) _d3ddev.NativePointer)->lpVtbl[5],
+            _d3ddev->lpVtbl[typeof(ID3D11Device).GetVtblIndex(nameof(ID3D11Device.CreateTexture2D))],
             CreateTexture2DDetour
         ));
 
-        var samplerDesc = SDX11.SamplerStateDescription.Default();
-        samplerDesc.Filter = SDX11.Filter.MinMagMipLinear;
-        samplerDesc.AddressU = SDX11.TextureAddressMode.Mirror;
-        samplerDesc.AddressV = SDX11.TextureAddressMode.Mirror;
-        samplerDesc.AddressW = SDX11.TextureAddressMode.Mirror;
-        _samplerMips = new(_d3ddev, samplerDesc);
+        var samplerDesc = D3D11_SAMPLER_DESC.DEFAULT;
+        samplerDesc.Filter = D3D11_FILTER.D3D11_FILTER_MIN_MAG_MIP_LINEAR;
+        samplerDesc.AddressU = D3D11_TEXTURE_ADDRESS_MODE.D3D11_TEXTURE_ADDRESS_MIRROR;
+        samplerDesc.AddressV = D3D11_TEXTURE_ADDRESS_MODE.D3D11_TEXTURE_ADDRESS_MIRROR;
+        samplerDesc.AddressW = D3D11_TEXTURE_ADDRESS_MODE.D3D11_TEXTURE_ADDRESS_MIRROR;
 
-        samplerDesc.Filter = SDX11.Filter.MinMagMipPoint;
-        samplerDesc.MinimumLod = 0;
-        samplerDesc.MaximumLod = 0;
-        _samplerPoint = new(_d3ddev, samplerDesc);
+        ID3D11SamplerState* samplerState;
+        _d3ddev->CreateSamplerState(&samplerDesc, &samplerState);
+        _samplerMips = samplerState;
 
-        samplerDesc.Filter = SDX11.Filter.MinMagLinearMipPoint;
-        _samplerLinear = new(_d3ddev, samplerDesc);
+        samplerDesc.Filter = D3D11_FILTER.D3D11_FILTER_MIN_MAG_MIP_POINT;
+        samplerDesc.MinLOD = 0;
+        samplerDesc.MaxLOD = 0;
+        _d3ddev->CreateSamplerState(&samplerDesc, &samplerState);
+        _samplerPoint = samplerState;
+
+        samplerDesc.Filter = D3D11_FILTER.D3D11_FILTER_COMPARISON_MIN_MAG_LINEAR_MIP_POINT;
+        _d3ddev->CreateSamplerState(&samplerDesc, &samplerState);
+        _samplerLinear = samplerState;
 
         foreach (var hook in _hooks)
         {
@@ -207,12 +213,12 @@ public unsafe sealed class GameSizeState
 
         lock (_renderLock)
         {
-            _samplerLinear.Dispose();
-            _samplerPoint.Dispose();
-            _samplerMips.Dispose();
+            _samplerLinear->Release();
+            _samplerPoint->Release();
+            _samplerMips->Release();
         }
 
-        _d3ddev.Dispose();
+        _d3ddev->Release();
     }
 
     public void SetConfigGraphicsRezoType(ResolutionScalingMode mode)
@@ -447,18 +453,17 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
     private void ImmediateBindPSSRVsDetour(ImmediateContextEx* im, PixelShader* ps, ImmediateSRV* data)
     {
         _immediateBindPSSRVsHook.OriginalDisposeSafe(im, ps, data);
-        PostImmediateBindSRVs(true, _d3dctx.PixelShader, im, ps, data);
+        PostImmediateBindSRVs(false, im, ps, data);
     }
 
     private void ImmediateBindCSSRVsDetour(ImmediateContextEx* im, Shader* cs, ImmediateSRV* data)
     {
         _immediateBindCSSRVsHook.OriginalDisposeSafe(im, cs, data);
-        PostImmediateBindSRVs(true, _d3dctx.PixelShader, im, (PixelShader*) cs, data);
+        PostImmediateBindSRVs(true, im, (PixelShader*) cs, data);
     }
 
     private void PostImmediateBindSRVs(
-        bool isPS,
-        SDX11.CommonShaderStage stage,
+        bool isCS,
         ImmediateContextEx* im,
         PixelShader* ps,
         ImmediateSRV* data
@@ -474,7 +479,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
             // Service.PluginLog.Debug($"ImmediateBind{(isPS ? "PS" : "CS")}SRVs #{_drawCount} 0x{(long) (nint) ps}");
             var tex = data[0].Texture;
 
-            SDX11.SamplerState? sampler = null;
+            ID3D11SamplerState* sampler = null;
 
             if (Service.Config._.Game.IsEnabled && Service.Config._.ResolutionScalingMode == ResolutionScalingMode.Point)
             {
@@ -483,7 +488,7 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
             else if (tex->MipLevel != 1)
             {
                 sampler = _samplerMips;
-                _d3dctx.GenerateMips(CppObject.FromPointer<SDX11.ShaderResourceView>((nint) tex->D3D11ShaderResourceView));
+                _d3dctx->GenerateMips((ID3D11ShaderResourceView*) tex->D3D11ShaderResourceView);
             }
             else if (Service.Config._.Game.IsEnabled && Service.Config._.ResolutionScalingMode == ResolutionScalingMode.Linear)
             {
@@ -492,11 +497,11 @@ RR {dev->RequestRender} 0x{(long) dev->ImmediateContext->IfNonZeroSkipPostTickPr
 
             if (sampler is not null)
             {
-                stage.SetSampler(0, sampler);
-                if (!isPS)
+                if (!isCS)
                 {
-                    _d3dctx.PixelShader.SetSampler(0, sampler);
+                    _d3dctx->CSSetSamplers(0, 1, &sampler);
                 }
+                _d3dctx->PSSetSamplers(0, 1, &sampler);
             }
         }
     }
