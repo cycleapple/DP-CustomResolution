@@ -1,4 +1,4 @@
-﻿using CustomResolution.Hooks;
+using CustomResolution.Hooks;
 using FFXIVClientStructs.FFXIV.Client.Graphics.Kernel;
 using FFXIVClientStructs.FFXIV.Client.System.Framework;
 using FFXIVClientStructs.Interop;
@@ -304,7 +304,7 @@ public unsafe class DisplaySizeState : IDisposable
             _dbg.AppendLine($"STYLE: 0x{style:X8}");
             _dbg.AppendLine($"EXSTYLE: 0x{GetWindowLong(_currentHwnd, GWL.GWL_EXSTYLE):X8}");
 
-            Span<ushort> name = stackalloc ushort[256];
+            Span<char> name = stackalloc char[256];
             GetClassName(_currentHwnd, name.GetPointer(0), name.Length);
             WNDCLASSEXW wce;
             GetClassInfoEx(GetModuleHandle(null), name.GetPointer(0), &wce);

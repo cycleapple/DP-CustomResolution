@@ -1,0 +1,8 @@
+[
+  {
+    "path": "FloppyUtils",
+    "baseCommit": "cdf058cc6cb3f20e63b4f09267a90337cc95f1b2",
+    "patch": "patches/8aa15d7789ffe6e5.patch",
+    "sha256": "c9ac14d4f3277f24bd8cbde80761723317c44f566b503de20c5c5ab7bb6d7cf7"
+  }
+]
